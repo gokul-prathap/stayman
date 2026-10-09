@@ -3,6 +3,8 @@ import { useLocation } from 'react-router-dom';
 import { CheckCircle2, FileCheck2 } from 'lucide-react';
 import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
+import DocumentPreview from '../components/DocumentPreview';
+import { validateGuestDetails } from '../utils/guestCheckinValidation';
 import { client, openInvitation, compressIdentityImage, submitGuestCheckin } from '../services/guestCheckinService';
 
 const initial = { full_name: '', email: '', phone: '', arrival_date: '', departure_date: '', coming_from: '', going_to: '', foreign_guest: false };
@@ -13,6 +15,8 @@ export default function GuestCheckinPage() {
   const [invitation, setInvitation] = useState(null);
   const [details, setDetails] = useState(initial);
   const [photos, setPhotos] = useState({});
+  const [reviewing, setReviewing] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [processing, setProcessing] = useState({});
   const [error, setError] = useState('');
@@ -21,6 +25,7 @@ export default function GuestCheckinPage() {
   useEffect(() => {
     let active = true;
     setInvitation(null); setDetails(initial); setError('');
+    setReviewing(false); setConfirmed(false);
     setPhotos({}); setProcessing({});
     versions.current.front++; versions.current.back++;
     if (!token || !clientAvailable()) return;
@@ -51,11 +56,22 @@ export default function GuestCheckinPage() {
   }
 
   async function submit(event) {
-    event.preventDefault(); setBusy(true); setError('');
+    event.preventDefault();
+    setError('');
     try {
-      if (details.departure_date < details.arrival_date) throw new Error('Departure must be on or after arrival.');
-      const row = await submitGuestCheckin(invitation, details, photos);
-      setInvitation(row); setPhotos({});
+      const cleaned = validateGuestDetails(details);
+      if (processing.front || processing.back || !photos.front || !photos.back) {
+        throw new Error('Please choose both document photos and wait for compression.');
+      }
+      if (!reviewing) {
+        setDetails(cleaned); setConfirmed(false); setReviewing(true);
+        return;
+      }
+      if (!confirmed) throw new Error('Please confirm that your details and documents are correct.');
+      if (busy) return;
+      setBusy(true);
+      const row = await submitGuestCheckin(invitation, cleaned, photos);
+      setInvitation(row); setPhotos({}); setReviewing(false);
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
   }
@@ -78,6 +94,38 @@ export default function GuestCheckinPage() {
             !invitation ? <div role="status" className="text-sm text-slate-600">
               {busy ? 'Opening your invitation...' : 'Unable to open this invitation. Please refresh or contact reception.'}
             </div> :
+            reviewing ? <form onSubmit={submit} className="space-y-5">
+              <h2 className="text-lg font-semibold text-slate-900">Review your check-in</h2>
+              <p className="text-sm text-slate-500">Check your details and make sure both compressed photos are readable before submitting.</p>
+              <dl className="grid gap-4 rounded-lg bg-slate-50 p-4 sm:grid-cols-2">
+                {[
+                  ['Full name', details.full_name], ['Email', details.email],
+                  ['Phone number', details.phone], ['Date of arrival', details.arrival_date],
+                  ['Departure date', details.departure_date], ['Coming from', details.coming_from],
+                  ['Going to', details.going_to],
+                  ['Documents', details.foreign_guest ? 'Passport and visa' : 'ID front and back'],
+                ].map(([label, value]) => <div key={label}>
+                  <dt className="text-xs text-slate-500">{label}</dt>
+                  <dd className="mt-1 break-words text-sm font-medium text-slate-800">{value}</dd>
+                </div>)}
+              </dl>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <DocumentPreview blob={photos.front} label={details.foreign_guest ? 'Passport front' : 'ID front side'} />
+                <DocumentPreview blob={photos.back} label={details.foreign_guest ? 'Visa' : 'ID back side'} />
+              </div>
+              <label className="flex items-start gap-2 text-sm text-slate-700">
+                <input type="checkbox" required checked={confirmed} disabled={busy} className="mt-1"
+                  onChange={event => setConfirmed(event.target.checked)} />
+                I confirm that my details are correct and both document photos are readable.
+              </label>
+              <div className="flex flex-wrap gap-3">
+                <Button type="button" variant="secondary" disabled={busy} onClick={() => {
+                  setReviewing(false); setConfirmed(false); setError('');
+                }}>Edit details / photos</Button>
+                <Button disabled={busy || !confirmed}>{busy ? 'Uploading...' : 'Confirm and upload'}</Button>
+              </div>
+              <p className="text-xs text-slate-500">After submission, contact reception to arrange any corrections.</p>
+            </form> :
             <form onSubmit={submit} className="space-y-5">
               <fieldset disabled={busy} className="space-y-5">
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -96,12 +144,12 @@ export default function GuestCheckinPage() {
                 }} />I am a foreign guest (passport and visa required)</label>
                 <div className="grid gap-4 sm:grid-cols-2" key={String(details.foreign_guest)}>
                   {['front', 'back'].map(side => <div key={side}>
-                    <Input label={details.foreign_guest ? (side === 'front' ? 'Passport front' : 'Visa') : (side === 'front' ? 'ID front side' : 'ID back side')} type="file" accept="image/jpeg,image/png,image/webp" required onChange={event => choosePhoto(side, event.target.files?.[0])} />
+                    <Input label={details.foreign_guest ? (side === 'front' ? 'Passport front' : 'Visa') : (side === 'front' ? 'ID front side' : 'ID back side')} type="file" accept="image/jpeg,image/png,image/webp" required={!photos[side]} onChange={event => choosePhoto(side, event.target.files?.[0])} />
                     <p className="mt-2 text-xs text-slate-500" aria-live="polite">{processing[side] ? 'Compressing photo…' : photos[side] ? `Ready · ${Math.ceil(photos[side].size / 1024)} KB` : 'JPEG, PNG or WebP, up to 10 MB.'}</p>
                   </div>)}
                 </div>
-                <p className="text-xs text-slate-500">Photos are compressed to a maximum of 1 MB each. Choose another photo to replace it before submitting. Please ensure the details are readable. After submission, reception must arrange any corrections.</p>
-                <Button disabled={busy || processing.front || processing.back || !photos.front || !photos.back}>{busy ? 'Uploading…' : 'Submit check-in'}</Button>
+                <p className="text-xs text-slate-500">Photos are compressed to a maximum of 1 MB each. Choose another photo to replace it. Next, review your details and the compressed photos before uploading.</p>
+                <Button disabled={busy || processing.front || processing.back || !photos.front || !photos.back}>{busy ? 'Please wait...' : 'Review details and photos'}</Button>
               </fieldset>
             </form>}
         </div>

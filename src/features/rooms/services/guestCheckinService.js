@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { validateGuestDetails } from '../utils/guestCheckinValidation';
 
 // Separate guest sessions from staff sign-ins and ignore email magic-link callbacks.
 const guestClient = import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -64,6 +65,15 @@ export async function claimInvitation(token) {
 }
 
 export async function submitGuestCheckin(invitation, details, photos) {
+  const cleaned = validateGuestDetails(details);
+  if (!invitation || invitation.status !== 'draft') throw new Error('This invitation is not open for uploads.');
+  // Validate both slots before any network writes, so a missing/invalid second
+  // photo does not upload the first one unnecessarily.
+  for (const side of ['front', 'back']) {
+    if (!photos[side] || photos[side].type !== 'image/jpeg' || photos[side].size > 1024 * 1024 || photos[side].size === 0) {
+      throw new Error('Please choose both compressed document photos (maximum 1 MB each).');
+    }
+  }
   for (const side of ['front', 'back']) {
     if (!photos[side]) throw new Error('Please choose both document photos.');
     const { error } = await client().storage.from('guest-identities')
@@ -73,7 +83,7 @@ export async function submitGuestCheckin(invitation, details, photos) {
     if (error) throw error;
   }
   const { data, error } = await client().rpc('complete_guest_checkin', {
-    invitation_id: invitation.id, guest_details: details,
+    invitation_id: invitation.id, guest_details: cleaned,
   });
   if (error) throw error;
   return data;
