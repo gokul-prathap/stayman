@@ -5,8 +5,8 @@ The standalone route is /guest-check-in. It uses the existing Supabase client an
 ## Setup
 
 1. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY. Never place a service-role key in Vite.
-2. Apply supabase/migrations/202610090001_guest_checkin.sql to the existing Supabase project.
-3. Configure Supabase Auth email OTP templates to include {{ .Token }} (both signup confirmation and magic link), SMTP, and production Auth rate limits/CAPTCHA appropriate to your traffic. The form accepts an email code, not a magic-link callback.
+2. Apply 202610090001_guest_checkin.sql, then 202610090002_guest_checkin_without_email_auth.sql from supabase/migrations. If the first migration is already applied, run only the second.
+3. In Supabase Authentication settings, enable Anonymous Sign-Ins. No email templates, SMTP or magic links are required for this guest flow. A guest session is created automatically using a separate browser storage key from staff authentication.
 4. Host with SPA fallback to index.html and HTTPS.
 5. Create an invitation from a trusted backend or the Supabase SQL editor. Never expose invitation creation to public clients. The QR is per guest/stay, rather than a shared QR that grants unlimited uploads.
 
@@ -28,7 +28,7 @@ Encode qr_target using your reception QR generator. The fragment avoids sending 
 
 ## Limits and behavior
 
-Email OTP proves account ownership; the hashed, expiring invitation must match the verified email. Only its owner can claim it. RLS and RPC permissions block anonymous uploads and direct changes to invitation status/details. Private bucket policies allow exactly front.jpg and back.jpg per invitation (1 MB JPEG each). Resubmitting after a partial failure overwrites those slots without accumulating files. Repeated scans restore an existing authenticated session and show Already uploaded after completion; on another browser the guest verifies the same email again.
+Possession of the secret, hashed, expiring invitation grants access. Email is a required contact field, not proof of identity. Anyone with a draft invitation link can open it, so give each guest a private link rather than a shared public QR. A new browser can resume a draft, transferring upload access to its session. RLS and RPC permissions block anonymous uploads and direct changes to invitation status/details. Private bucket policies allow exactly front.jpg and back.jpg per invitation (1 MB JPEG each). Resubmitting after a partial failure overwrites those slots without accumulating files. Repeated scans show Already uploaded after completion, including on another browser. Completed links return only a receipt; they do not transfer ownership or disclose contact details.
 
 Original photos are capped at 10 MB in the UI, resized to 1600 pixels on the longest edge, re-encoded as JPEG (removing original metadata), and compressed below 1 MB. The UI supports JPEG/PNG/WebP only. Confirm the compressed identity details are readable before submission.
 
@@ -38,4 +38,14 @@ The commented future IP/network hook is in guestCheckinService.js. Implement it 
 
 ## Verification
 
-Run npm run build. Against a configured test project verify: wrong-email/expired tokens fail; anonymous and other-user storage writes fail; arbitrary third files and files above 1 MB fail; incomplete uploads can retry; completion requires both files; completed invitations reject replacements; rescanning shows Already uploaded. Database/storage policies need a live Supabase integration check before production rollout.
+Run npm run build. Against a configured test project verify: invalid/expired draft tokens fail; anonymous and other-user storage writes fail; arbitrary third files and files above 1 MB fail; incomplete uploads can retry; completion requires both files; completed invitations reject replacements; rescanning shows Already uploaded. Database/storage policies need a live Supabase integration check before production rollout.
+
+## Anonymous session rollout
+
+Existing projects: run only migration 202610090002_guest_checkin_without_email_auth.sql if migration 001 was applied. Enable anonymous sign-ins and redeploy the app. Existing invitation links still work. No magic-link implementation is needed because guests no longer verify email.
+
+Anonymous sessions use the authenticated database role. Before enabling them, verify that staff/reservation tables require staff authorization, rather than granting all authenticated users access. The guest migration scopes its own policies to an invitation owner; it does not change existing staff-table policies. Supabase recommends CAPTCHA and anonymous-account cleanup for public deployments. CAPTCHA UI integration is not included here; enabling mandatory CAPTCHA without integrating its token will block anonymous sign-in.
+
+The invitation must remain a high-entropy per-stay secret. Contact email is unverified. Store only the generated token hash on the server; never publish the QR to a public page. For a second-device draft resume, only the latest claiming session may finish it.
+
+See https://supabase.com/docs/guides/auth/auth-anonymous for anonymous sign-in configuration and operational limits.

@@ -1,8 +1,34 @@
-import { supabase } from '../../../services/supabase';
+import { createClient } from '@supabase/supabase-js';
+
+// Separate guest sessions from staff sign-ins and ignore email magic-link callbacks.
+const guestClient = import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY
+  ? createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY, {
+    auth: { storageKey: 'stayman-guest-checkin', detectSessionInUrl: false },
+  }) : null;
+
+let sessionPromise;
+async function ensureGuestSession() {
+  if (!sessionPromise) {
+    sessionPromise = (async () => {
+      const { data, error } = await client().auth.getSession();
+      if (error) throw error;
+      if (data.session) return;
+      const { error: signInError } = await client().auth.signInAnonymously();
+      if (signInError) throw new Error('Unable to start guest check-in. Reception must enable Supabase anonymous sign-ins. ' + signInError.message);
+    })().finally(() => { sessionPromise = null; });
+  }
+  return sessionPromise;
+}
+
+export async function openInvitation(token) {
+  if (!/^[a-f0-9]{64}$/i.test(token)) throw new Error('Invalid invitation link. Please contact reception.');
+  await ensureGuestSession();
+  return claimInvitation(token);
+}
 
 export function client() {
-  if (!supabase) throw new Error('Guest check-in is not configured. Please contact reception.');
-  return supabase;
+  if (!guestClient) throw new Error('Guest check-in is not configured. Please contact reception.');
+  return guestClient;
 }
 
 export async function compressIdentityImage(file) {
