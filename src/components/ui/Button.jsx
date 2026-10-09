@@ -6,7 +6,7 @@ export default function Button({
 }) {
   const variants = {
     primary:
-      "bg-slate-900 text-white hover:bg-slate-800",
+      "bg-brand-600 text-white hover:bg-brand-700",
     secondary:
       "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
     danger:

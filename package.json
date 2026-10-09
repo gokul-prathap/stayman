@@ -13,11 +13,13 @@
     "@tanstack/react-query": "^5.104.0",
     "clsx": "^2.1.0",
     "date-fns": "^3.6.0",
+    "libphonenumber-js": "^1.13.15",
     "lucide-react": "^1.48.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-router-dom": "^6.22.3",
-    "tailwind-merge": "^2.2.2"
+    "tailwind-merge": "^2.2.2",
+    "validator": "^13.15.35"
   },
   "devDependencies": {
     "@types/react": "^18.2.66",

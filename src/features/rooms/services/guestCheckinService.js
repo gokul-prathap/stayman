@@ -27,36 +27,31 @@ export async function openInvitation(token) {
   return claimInvitation(token);
 }
 
+export function guestError(error) {
+  const message = error?.message || 'Unable to complete check-in. Please contact the manager.';
+  if (/daily check-in limit/i.test(message)) return 'Daily check-in limit reached. Please contact the manager.';
+  if (error?.status === 402 || String(error?.statusCode) === '402' || /quota|storage.*full|capacity|disk.*full/i.test(message)) {
+    return 'Uploads are currently unavailable because storage is full. Please contact the manager.';
+  }
+  if (/start_public_guest_checkin|schema cache/i.test(message)) {
+    return 'Guest check-in is not ready yet. Please contact the manager.';
+  }
+  return message;
+}
+
+export async function openPublicCheckin() {
+  await ensureGuestSession();
+  const { data, error } = await client().rpc('start_public_guest_checkin');
+  if (error) throw error;
+  return data;
+}
+
 export function client() {
   if (!guestClient) throw new Error('Guest check-in is not configured. Please contact reception.');
   return guestClient;
 }
 
-export async function compressIdentityImage(file) {
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-    throw new Error('Choose a JPEG, PNG or WebP photo.');
-  }
-  if (file.size > 10 * 1024 * 1024) throw new Error('Each original photo must be 10 MB or smaller.');
-  const bitmap = await createImageBitmap(file);
-  try {
-    if (bitmap.width * bitmap.height > 40000000) throw new Error('Photo resolution is too large.');
-    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-    const context = canvas.getContext('2d');
-    context.fillStyle = '#fff';
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    for (const quality of [0.82, 0.65, 0.48]) {
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
-      if (blob && blob.size <= 1024 * 1024) return blob;
-    }
-    throw new Error('Photo cannot be compressed below 1 MB. Choose a smaller photo.');
-  } finally {
-    bitmap.close();
-  }
-}
+export { compressIdentityImage } from '../utils/identityImage';
 
 export async function claimInvitation(token) {
   const { data, error } = await client().rpc('claim_guest_checkin', { invitation_token: token });

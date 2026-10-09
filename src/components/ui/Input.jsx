@@ -1,9 +1,13 @@
+import { useId } from 'react';
 export default function Input({
   label,
   error,
   className = "",
   ...props
 }) {
+  const generatedId = useId();
+  const inputId = props.id || generatedId;
+  const errorId = inputId + '-error';
   return (
     <label className="block">
       {label && (
@@ -14,6 +18,9 @@ export default function Input({
 
       <input
         {...props}
+        id={inputId}
+        aria-invalid={!!error}
+        aria-describedby={error ? errorId : props['aria-describedby']}
         className={`w-full rounded-lg border bg-white px-3 py-2.5 text-sm outline-none transition ${
           error
             ? "border-red-300 focus:ring-2 focus:ring-red-100"
@@ -22,7 +29,7 @@ export default function Input({
       />
 
       {error && (
-        <span className="mt-1 block text-xs text-red-600">
+        <span id={errorId} role="status" className="mt-1 block text-xs text-red-600">
           {error}
         </span>
       )}

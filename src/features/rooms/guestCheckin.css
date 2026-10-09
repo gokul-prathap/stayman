@@ -1,0 +1,14 @@
+
+.guest-modern { background:#f8fafc; color:#111827; }
+.guest-modern .bg-slate-50 { background-color:#f8fafc; }
+.guest-modern .bg-slate-100 { background-color:#f1f5f9; }
+.guest-modern .border-slate-200 { border-color:#e2e8f0; }
+.guest-modern .text-slate-900,.guest-modern .text-slate-800 { color:#111827; }
+.guest-modern .text-slate-500,.guest-modern .text-slate-600,.guest-modern .text-slate-700 { color:#64748b; }
+.guest-modern .bg-brand-600 { background-color:#6366f1; }
+.guest-modern .bg-brand-600:hover { background-color:#4f46e5; }
+.guest-modern button:focus-visible,.guest-modern input:focus-visible,.guest-modern select:focus-visible { outline:2px solid #6366f1; outline-offset:2px; }
+.guest-modern [aria-current="step"] { color:#4f46e5; }
+.guest-modern [aria-current="step"] span:first-child { background:#6366f1; border-color:#6366f1; color:white; }
+.guest-modern ol li { color:#64748b; }
+.guest-modern ol li span:first-child { border-color:#e2e8f0; color:#64748b; }
