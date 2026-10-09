@@ -1,103 +1,116 @@
-export const dates = Array.from(
-  { length: 7 },
-  (_, index) => {
-    const date = new Date();
-
-    date.setHours(0, 0, 0, 0);
-    date.setDate(date.getDate() + index);
-
-    return date;
-  }
-);
-
-export const allocationRows = [
+export const MOCK_UNITS = [
   {
-    roomId: "101",
-    roomName: "Room 101",
-    type: "Private • Deluxe King",
-
-    units: [
-      {
-        id: "101",
-        label: "Room 101",
-        status: "checked_in",
-        guest: "Arjun Menon",
-        nationality: "India",
-        phone: "+91 98765 43210",
-        checkIn: "Today",
-        checkOut: "Oct 02",
-        idUploaded: true,
-      },
-    ],
+    id: 'u-101',
+    roomId: 'r-101',
+    roomName: 'Room 101',
+    category: 'PRIVATE',
+    label: 'Room 101',
+    type: 'ROOM',
   },
-
   {
-    roomId: "102",
-    roomName: "Room 102",
-    type: "Private • Garden View",
-
-    units: [
-      {
-        id: "102",
-        label: "Room 102",
-        status: "vacant",
-      },
-    ],
+    id: 'u-102',
+    roomId: 'r-102',
+    roomName: 'Room 102',
+    category: 'PRIVATE',
+    label: 'Room 102',
+    type: 'ROOM',
   },
-
   {
-    roomId: "201",
-    roomName: "Dorm 201",
-    type: "6 Bed Mixed Dorm",
+    id: 'u-d201-a',
+    roomId: 'r-201',
+    roomName: 'Dorm 201',
+    category: 'DORMITORY',
+    label: 'Bed A',
+    type: 'BED',
+  },
+  {
+    id: 'u-d201-b',
+    roomId: 'r-201',
+    roomName: 'Dorm 201',
+    category: 'DORMITORY',
+    label: 'Bed B',
+    type: 'BED',
+  },
+  {
+    id: 'u-d201-c',
+    roomId: 'r-201',
+    roomName: 'Dorm 201',
+    category: 'DORMITORY',
+    label: 'Bed C',
+    type: 'BED',
+  },
+  {
+    id: 'u-d201-d',
+    roomId: 'r-201',
+    roomName: 'Dorm 201',
+    category: 'DORMITORY',
+    label: 'Bed D',
+    type: 'BED',
+  },
+  {
+    id: 'u-d201-e',
+    roomId: 'r-201',
+    roomName: 'Dorm 201',
+    category: 'DORMITORY',
+    label: 'Bed E',
+    type: 'BED',
+  },
+  {
+    id: 'u-d201-f',
+    roomId: 'r-201',
+    roomName: 'Dorm 201',
+    category: 'DORMITORY',
+    label: 'Bed F',
+    type: 'BED',
+  },
+];
 
-    units: [
-      {
-        id: "201-A",
-        label: "Bed A",
-        status: "checked_in",
-        guest: "Liam Carter",
-        nationality: "United Kingdom",
-        phone: "+44 7700 900123",
-        checkIn: "Today",
-        checkOut: "Oct 01",
-        idUploaded: true,
-      },
-
-      {
-        id: "201-B",
-        label: "Bed B",
-        status: "pending",
-        guest: "Maya Thomas",
-        nationality: "India",
-        phone: "+91 91234 56789",
-        checkIn: "Today",
-        checkOut: "Oct 03",
-        idUploaded: true,
-      },
-
-      {
-        id: "201-C",
-        label: "Bed C",
-        status: "vacant",
-      },
-
-      {
-        id: "201-D",
-        label: "Bed D",
-        status: "maintenance",
-      },
-
-      {
-        id: "201-E",
-        label: "Bed E",
-        status: "vacant",
-      },
-
-      {
-        id: "201-F",
-        label: "Bed F",
-        status: "vacant",
-      },
-    ],
+export const MOCK_ALLOCATIONS = [
+  {
+    id: 'alloc-1',
+    reservationId: 'res-101',
+    unitId: 'u-101',
+    guestName: 'Arjun Menon',
+    phone: '+91 98765 43210',
+    nationality: 'India',
+    status: 'CHECKED_IN',
+    checkInDate: '2026-09-29',
+    checkOutDate: '2026-10-02',
+    totalAmount: 750000,
+    paidAmount: 750000,
+  },
+  {
+    id: 'alloc-2',
+    reservationId: 'res-201a',
+    unitId: 'u-d201-a',
+    guestName: 'Liam Carter',
+    phone: '+44 7700 900077',
+    nationality: 'United Kingdom',
+    status: 'CHECKED_IN',
+    checkInDate: '2026-09-28',
+    checkOutDate: '2026-10-01',
+    totalAmount: 240000,
+    paidAmount: 240000,
+  },
+  {
+    id: 'alloc-3',
+    reservationId: 'res-201b',
+    unitId: 'u-d201-b',
+    guestName: 'Maya Thomas',
+    phone: '+91 98220 11223',
+    nationality: 'India',
+    status: 'PENDING',
+    checkInDate: '2026-09-29',
+    checkOutDate: '2026-10-03',
+    totalAmount: 320000,
+    paidAmount: 0,
+  },
+  {
+    id: 'maint-1',
+    unitId: 'u-d201-d',
+    status: 'MAINTENANCE',
+    checkInDate: '2026-09-29',
+    checkOutDate: '2026-10-03',
+    reason: 'Ladder bracket bolt repair',
   },
 ];

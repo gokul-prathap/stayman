@@ -1,41 +1,25 @@
-import { X } from "lucide-react";
+import React from 'react';
+import { X } from 'lucide-react';
 
-export default function Drawer({
-  open,
-  onClose,
-  title,
-  children,
-}) {
-  if (!open) return null;
+export function Drawer({ isOpen, onClose, title, children }) {
+  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[65]">
-      <button
-        type="button"
-        aria-label="Close drawer"
-        onClick={onClose}
-        className="absolute inset-0 bg-slate-950/30"
-      />
-
-      <section className="absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto bg-white shadow-2xl">
-        <div className="sticky top-0 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
-          <h3 className="font-semibold text-slate-900">
-            {title}
-          </h3>
-
-          <button
-            type="button"
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm transition-opacity">
+      <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <h2 className="text-lg font-bold text-slate-900">{title}</h2>
+          <button 
             onClick={onClose}
-            className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
           >
-            <X size={18} />
+            <X className="w-5 h-5" />
           </button>
         </div>
-
-        <div className="p-5">
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {children}
         </div>
-      </section>
+      </div>
     </div>
   );
 }

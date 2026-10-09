@@ -1,57 +1,30 @@
-import { Menu, Bell } from "lucide-react";
-import { useLocation } from "react-router-dom";
-import { getRouteByPath } from "../../app/routes";
+import React from 'react';
+import { Bell, Search } from 'lucide-react';
 
-export default function Topbar({ onMenuClick }) {
-  const location = useLocation();
-  const currentRoute = getRouteByPath(location.pathname);
-
+export function Topbar() {
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur sm:px-6">
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={onMenuClick}
-          className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
-          aria-label="Open navigation"
-        >
-          <Menu size={21} />
-        </button>
-
-        <div>
-          <div className="text-sm font-semibold text-slate-900">
-            {currentRoute.label}
-          </div>
-
-          <div className="hidden text-xs text-slate-400 sm:block">
-            Manage your property
-          </div>
-        </div>
+    <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between">
+      <div className="flex items-center gap-3 w-96">
+        <Search className="w-4 h-4 text-slate-400" />
+        <input
+          type="text"
+          placeholder="Search reservation, guest or phone..."
+          className="w-full text-sm bg-transparent border-none focus:outline-none placeholder-slate-400"
+        />
       </div>
-
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          className="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100"
-          aria-label="Notifications"
-        >
-          <Bell size={19} />
-
-          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500" />
+      <div className="flex items-center gap-4">
+        <button className="relative p-2 text-slate-500 hover:text-slate-700">
+          <Bell className="w-5 h-5" />
+          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full"></span>
         </button>
-
-        <div className="hidden text-right sm:block">
-          <div className="text-sm font-medium text-slate-700">
-            Property Manager
+        <div className="flex items-center gap-3 pl-4 border-l border-slate-200">
+          <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm">
+            VJ
           </div>
-
-          <div className="text-xs text-slate-400">
-            Administrator
+          <div className="text-left text-xs">
+            <p className="font-semibold text-slate-800">Vikram Joshi</p>
+            <p className="text-slate-500">Manager</p>
           </div>
-        </div>
-
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">
-          PM
         </div>
       </div>
     </header>
