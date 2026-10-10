@@ -1,0 +1,14 @@
+import React,{useState} from 'react';
+import {refundSummary} from '../utils/guestOperations';
+import {dayInZone,money} from '../utils/metrics';
+import Modal from '../../../components/ui/Modal';
+import ReservationDetails from '../../reservations/components/ReservationDetails';
+export default function RefundReport({data,from,to,timezone}) {
+ const [selected,setSelected]=useState(null);
+ const inRange=date=>date&&dayInZone(date,timezone)>=from&&dayInZone(date,timezone)<=to;
+ const refunds=data.payments.filter(p=>p.kind==='REFUND');
+ const done=refunds.filter(p=>inRange(p.paid_at)).reduce((s,p)=>s+Number(p.amount_paise),0);
+ const rows=data.reservations.map(r=>({r,...refundSummary(r,data.payments)})).filter(row=>row.pending>0 || refunds.some(p=>p.reservation_id===row.r.id&&inRange(p.paid_at)) || (row.done>0&&inRange(row.r.cancelled_at)));
+ const pending=rows.reduce((s,r)=>s+r.pending,0);
+ return <div className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><article className="card"><p className="muted">Refunds pending · all dates</p><p className="metric mt-2">{money(pending)}</p></article><article className="card"><p className="muted">Refunds returned · selected period</p><p className="metric mt-2">{money(done)}</p></article></div><article className="card"><h2>Refund management</h2><p className="muted mt-2">Pending amounts include cancelled bookings and overpayments. Record a refund after money is returned; partial refunds remain pending.</p><div className="mt-4 overflow-x-auto"><table><thead><tr><th>Booking</th><th>Status</th><th>Pending</th><th>Returned (all time)</th><th>Manage</th></tr></thead><tbody>{rows.map(({r,pending,done,status})=><tr key={r.id}><td>{data.guests.find(g=>g.id===r.guest_id)?.full_name}<p className="muted">{r.booking_ref}</p><p className="muted">{r.cancellation_reason}</p></td><td><span className={status==='Pending'?'text-amber-700':'text-emerald-600'}>{status}</span></td><td>{money(pending)}</td><td>{money(done)}</td><td><button className="secondary" onClick={()=>setSelected(r.id)}>Manage refund</button></td></tr>)}{!rows.length&&<tr><td colSpan={5}>No pending refunds or refunds in this period.</td></tr>}</tbody></table></div></article><article className="card"><h2>Refund transactions in selected period</h2><div className="mt-3 overflow-x-auto"><table><thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Reference / note</th></tr></thead><tbody>{refunds.filter(p=>inRange(p.paid_at)).map(p=><tr key={p.id}><td>{dayInZone(p.paid_at,timezone)}</td><td>{money(p.amount_paise)}</td><td>{p.method}</td><td>{p.note||'—'}</td></tr>)}</tbody></table></div></article><Modal isOpen={!!selected} onClose={()=>setSelected(null)} title="Manage refund">{selected&&<ReservationDetails key={selected} reservationId={selected}/>}</Modal></div>;
+}

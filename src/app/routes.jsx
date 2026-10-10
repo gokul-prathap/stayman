@@ -1,36 +1,36 @@
-import React from 'react';
+import React, {lazy,Suspense} from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AppLayout } from '../components/layout/Applayout';
-import DashboardPage from '../features/allocation/pages/DashboardPage';
-import AllocationPage from '../features/allocation/pages/AllocationPage';
-import RoomsPage from '../features/rooms/pages/RoomsPage';
-import HousekeepingPage from '../features/rooms/pages/HousekeepingPage';
-import ReservationsPage from '../features/reservations/pages/ReservationsPage';
-import GuestCheckinPage from '../features/rooms/pages/GuestCheckinPage';
+const DashboardPage = lazy(() => import('../features/allocation/pages/DashboardPage'));
+const AllocationPage = lazy(() => import('../features/allocation/pages/AllocationPage'));
+const RoomsPage = lazy(() => import('../features/rooms/pages/RoomsPage'));
+const HousekeepingPage = lazy(() => import('../features/rooms/pages/HousekeepingPage'));
+const ReservationsPage = lazy(() => import('../features/reservations/pages/ReservationsPage'));
+const GuestCheckinPage = lazy(() => import('../features/rooms/pages/GuestCheckinPage'));
 
-// Standard fallback placeholders for routes undergoing backend wiring
-const Placeholder = ({ title }) => (
-  <div className="p-8 text-center text-slate-500">
-    <h2 className="text-xl font-bold text-slate-800 mb-2">{title}</h2>
-    <p className="text-sm">Module interface connected and ready for API sync.</p>
-  </div>
-);
+import StaffGate from '../components/auth/StaffGate';
+const GuestsPage = lazy(() => import('../features/rooms/pages/GuestsPage'));
+
+const ReportsPage = lazy(() => import('../features/management/pages/ReportsPage'));
+const PricingPage = lazy(() => import('../features/management/pages/PricingPage'));
+const SettingsPage = lazy(() => import('../features/rooms/pages/SettingsPage'));
 
 export function AppRoutes() {
   return (
-    <Routes>
+    <Suspense fallback={<div role="status" className="p-8 text-sm text-slate-500">Loading Stayman…</div>}><Routes>
       <Route path="/guest-check-in" element={<GuestCheckinPage />} />
-      <Route element={<AppLayout />}>
+      <Route element={<StaffGate><AppLayout /></StaffGate>}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/allocation" element={<AllocationPage />} />
         <Route path="/reservations" element={<ReservationsPage />} />
         <Route path="/rooms" element={<RoomsPage />} />
-        <Route path="/guests" element={<Placeholder title="Guest Profiles" />} />
+        <Route path="/guests" element={<GuestsPage />} />
         <Route path="/housekeeping" element={<HousekeepingPage />} />
-        <Route path="/reports" element={<Placeholder title="Operational Reports" />} />
-        <Route path="/settings" element={<Placeholder title="Property Settings" />} />
+        <Route path="/pricing" element={<PricingPage />} />
+        <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
-    </Routes>
+    </Routes></Suspense>
   );
 }

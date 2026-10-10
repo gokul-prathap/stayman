@@ -39,9 +39,9 @@ export function guestError(error) {
   return message;
 }
 
-export async function openPublicCheckin() {
+export async function openPublicCheckin(propertyId) {
   await ensureGuestSession();
-  const { data, error } = await client().rpc('start_public_guest_checkin');
+  const { data, error } = await client().rpc('start_public_guest_checkin', propertyId ? {p_property:propertyId} : {});
   if (error) throw error;
   return data;
 }
@@ -60,7 +60,7 @@ export async function claimInvitation(token) {
 }
 
 export async function submitGuestCheckin(invitation, details, photos) {
-  const cleaned = validateGuestDetails(details);
+  const cleaned = validateGuestDetails(details, invitation?.linked ? invitation.arrival_date : undefined);
   if (!invitation || invitation.status !== 'draft') throw new Error('This invitation is not open for uploads.');
   // Validate both slots before any network writes, so a missing/invalid second
   // photo does not upload the first one unnecessarily.

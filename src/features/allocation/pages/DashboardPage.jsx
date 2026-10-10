@@ -1,32 +1,26 @@
 import React from 'react';
-import { Bed, Users, DollarSign, CalendarCheck } from 'lucide-react';
-import { formatCurrency } from '../../../utils/Formatters';
-
+import { Link } from 'react-router-dom';
+import { CalendarCheck, CalendarX, IndianRupee, Plus, ArrowUpRight, BedDouble } from 'lucide-react';
+import {usePropertyData} from '../../reservations/hooks/usePropertyData';
+import {useStaff} from '../../../components/auth/StaffGate';
+import {dayInZone,shiftDay,reportMetrics,money} from '../../management/utils/metrics';
+import {refundSummary} from '../../management/utils/guestOperations';
+import PageState from '../../management/components/PageState';
+import '../../management/management.css';
+import './dashboard.css';
 export default function DashboardPage() {
-  const stats = [
-    { title: 'Occupied Units', value: '2 / 8', icon: Bed, sub: '25% Occupancy' },
-    { title: 'Expected Arrivals', value: '1', icon: CalendarCheck, sub: 'Today' },
-    { title: 'Active Guests', value: '2', icon: Users, sub: 'In-house' },
-    { title: "Today's Revenue", value: formatCurrency(990000), icon: DollarSign, sub: 'Collected' },
-  ];
-
-  return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-slate-900">Operational Dashboard</h1>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((s) => (
-          <div key={s.title} className="p-5 bg-white border border-slate-200 rounded-xl shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase text-slate-500">{s.title}</p>
-              <p className="text-2xl font-bold text-slate-900 mt-1">{s.value}</p>
-              <p className="text-xs text-indigo-600 mt-1 font-medium">{s.sub}</p>
-            </div>
-            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
-              <s.icon className="w-6 h-6" />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+ const {property}=useStaff(),{data,isPending,error,refresh}=usePropertyData();
+ const today=dayInZone(new Date(),property.timezone);
+ const report=data?reportMetrics(data,today,today,property.timezone):null;
+ const week=data?reportMetrics(data,shiftDay(today,-6),today,property.timezone):null;
+ const percent=Math.round(report?.occupancy||0), daily=report?.days[0];
+ const occupied=data?.allocations.filter(a=>a.status!=='MAINTENANCE' && a.checkInDate<=today && a.checkOutDate>today)||[];
+ const pendingRefund=data?.reservations.reduce((s,r)=>s+refundSummary(r,data.payments).pending,0)||0;
+ const activities=data?[...data.reservations.map(r=>({id:r.id,date:r.created_at,title:'Reservation created',detail:data.guests.find(g=>g.id===r.guest_id)?.full_name})),...data.payments.map(p=>({id:p.id,date:p.paid_at,title:p.kind==='REFUND'?'Refund recorded':'Payment recorded',detail:money(p.amount_paise)}))].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5):[];
+ return <section className="management dashboard space-y-6"><header><p className="dashboard-eyebrow">{property.name} · {today}</p><h1>Dashboard</h1><p className="subtitle">Here’s what’s happening at your property today.</p></header><PageState pending={isPending} error={error} retry={refresh}/>{data&&!error&&<>
+ <div className="dashboard-overview"><article className="card occupancy-card"><div><p className="dashboard-eyebrow">PROPERTY AT A GLANCE</p><h2>Occupancy rate</h2><p className="muted mt-2">Today’s booked capacity</p></div><div className="occupancy-ring"><svg viewBox="0 0 200 200" role="img" aria-label={percent+' percent occupancy'}><defs><linearGradient id="occupancy-fill" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#3b67f6"/><stop offset=".6" stopColor="#38a4e8"/><stop offset="1" stopColor="#35d2b0"/></linearGradient></defs><circle cx="100" cy="100" r="83" fill="none" stroke="#edf2fa" strokeWidth="15"/><circle className="occupancy-progress" cx="100" cy="100" r="83" fill="none" stroke="url(#occupancy-fill)" strokeWidth="15" strokeLinecap="round" pathLength="100" strokeDasharray="100" style={{'--ring-offset':100-percent,strokeDashoffset:100-percent}} transform="rotate(-90 100 100)"/></svg><div><strong>{percent}<small>%</small></strong><span>occupancy</span></div></div><div className="occupancy-foot"><strong>{daily.occupied} / {daily.available}</strong><p>occupied units · {daily.blocked} under maintenance</p><p>{occupied.filter(a=>data.units.find(u=>u.id===a.unitId)?.type==='ROOM').length} private rooms · {occupied.filter(a=>data.units.find(u=>u.id===a.unitId)?.type==='BED').length} dorm beds occupied</p></div></article>
+ <div className="dashboard-stats">{[{title:'Available units',value:Math.max(0,daily.available-daily.occupied),sub:'Ready for a stay',icon:BedDouble},{title:'Today’s arrivals',value:report.arrivals.length,sub:'Expected check-ins',icon:CalendarCheck},{title:'Today’s departures',value:report.departures.length,sub:'Scheduled check-outs',icon:CalendarX},{title:'Net receipts today',value:money(report.cash),sub:'Receipts less refunds',icon:IndianRupee}].map(s=><article className="card dashboard-stat" key={s.title}><s.icon size={20}/><p className="muted">{s.title}</p><p className="metric">{s.value}</p><p className="muted">{s.sub}</p></article>)}</div></div>
+ <div className="dashboard-bottom"><article className="card"><div className="flex justify-between"><h2>Stay revenue</h2><span className="muted">Last 7 days</span></div><p className="metric mt-4">{money(week.earned)}</p><svg viewBox="0 0 400 110" className="mt-5 w-full" role="img" aria-label="Seven day stay revenue"><defs><linearGradient id="revenue-fill" x2="0" y2="1"><stop stopColor="#d9e7ff"/><stop offset="1" stopColor="#fff"/></linearGradient></defs><path d={(()=>{const max=Math.max(1,...week.days.map(d=>d.earned));const points=week.days.map((d,i)=>[10+i*63,95-d.earned/max*75]);return 'M10 105 L'+points.map(p=>p.join(' ')).join(' L')+' L388 105Z';})()} fill="url(#revenue-fill)"/><polyline points={week.days.map((d,i)=>(10+i*63)+','+(95-d.earned/Math.max(1,...week.days.map(d=>d.earned))*75)).join(' ')} fill="none" stroke="#447cf7" strokeWidth="3"/></svg><p className="muted">Value of booked nights, separate from cash received.</p></article>
+ <article className="card"><h2>Recent activity</h2><div className="mt-4 space-y-4">{activities.map(a=><div key={a.id} className="flex gap-3"><span className="activity-dot"/><div><p className="text-xs font-semibold">{a.title}</p><p className="muted mt-1">{a.detail} · {new Date(a.date).toLocaleTimeString('en-IN',{timeZone:property.timezone,hour:'2-digit',minute:'2-digit'})}</p></div></div>)}{!activities.length&&<p className="muted">Activity will appear as bookings and payments are added.</p>}</div></article>
+ <article className="card"><h2>Quick actions</h2><div className="mt-4 space-y-3">{[['/reservations','New reservation',Plus],['/guests','View guests',CalendarCheck],['/reports','Reports & refunds',IndianRupee],['/allocation','Allocation matrix',BedDouble]].map(([path,label,Icon])=><Link key={path} to={path} className="dashboard-action"><Icon size={16}/>{label}<ArrowUpRight size={14}/></Link>)}</div>{pendingRefund>0&&<p className="mt-4 text-xs text-amber-700">{money(pendingRefund)} in refunds pending</p>}</article></div></>}</section>;
 }

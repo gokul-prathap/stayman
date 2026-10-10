@@ -1,3 +1,26 @@
+export async function prepareMobilePhoto(file) {
+  if (file.size > 10 * 1024 * 1024) throw new Error('Each original photo must be 10 MB or smaller.');
+  const heic = /image\/(heic|heif)/i.test(file.type) || /\.(heic|heif)$/i.test(file.name || '');
+  if (!heic && (!file.type.startsWith('image/') || /svg/i.test(file.type))) {
+    throw new Error('Choose a photo such as JPEG, PNG, WebP, AVIF, GIF, BMP or HEIC.');
+  }
+  let photo = file;
+  try {
+    if (heic) {
+      const { default: convert } = await import('heic2any');
+      const result = await convert({ blob: file, toType: 'image/jpeg', quality: 0.92 });
+      photo = Array.isArray(result) ? result[0] : result;
+    }
+    const decoded = await createImageBitmap(photo);
+    if (decoded.width * decoded.height > 64000000) { decoded.close(); throw new Error('Photo resolution is too large.'); }
+    decoded.close();
+    return photo;
+  } catch (error) {
+    if (/resolution/.test(error.message || '')) throw error;
+    throw new Error('This photo format cannot be opened. Export it as JPEG or take a new photo.');
+  }
+}
+
 export const TARGET_IMAGE_BYTES = 450 * 1024;
 export const MAX_IMAGE_BYTES = 1024 * 1024;
 
@@ -14,11 +37,11 @@ export function cropPixels(width, height, crop = { x: 0, y: 0, width: 1, height:
 }
 
 export async function compressIdentityImage(file, crop) {
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error('Choose a JPEG, PNG or WebP photo.');
+  if (!file.type.startsWith('image/') || /svg|heic|heif/i.test(file.type)) throw new Error('Choose a JPEG, PNG or WebP photo.');
   if (file.size > 10 * 1024 * 1024) throw new Error('Each original photo must be 10 MB or smaller.');
   const bitmap = await createImageBitmap(file);
   try {
-    if (bitmap.width * bitmap.height > 40000000) throw new Error('Photo resolution is too large.');
+    if (bitmap.width * bitmap.height > 64000000) throw new Error('Photo resolution is too large.');
     const area = cropPixels(bitmap.width, bitmap.height, crop);
     let smallest;
     // Prefer readable resolution; reduce dimensions only when quality alone

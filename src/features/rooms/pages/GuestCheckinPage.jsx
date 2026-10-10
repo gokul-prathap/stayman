@@ -6,6 +6,7 @@ import Input from '../../../components/ui/Input';
 import PhoneInput from '../components/PhoneInput';
 import { getCountryCallingCode } from 'libphonenumber-js/max';
 import '../guestCheckin.css';
+import { prepareMobilePhoto } from '../utils/identityImage';
 import { property } from '../../../config/property';
 import DocumentPreview from '../components/DocumentPreview';
 import ImageCropDialog from '../components/ImageCropDialog';
@@ -18,6 +19,7 @@ const initial = { full_name: '', email: '', phone: '', phone_country: 'IN', arri
 export default function GuestCheckinPage() {
   const location = useLocation();
   const token = new URLSearchParams(location.hash.slice(1)).get('invite') || new URLSearchParams(location.search).get('invite') || '';
+  const propertyId=new URLSearchParams(location.search).get('property')||'';
   const [invitation, setInvitation] = useState(null);
   const [details, setDetails] = useState(initial);
   const [photos, setPhotos] = useState({});
@@ -30,7 +32,7 @@ export default function GuestCheckinPage() {
   const [error, setError] = useState('');
   const [touched, setTouched] = useState({});
   const [today, setToday] = useState(propertyToday);
-  const fieldErrors = guestFieldErrors(details, today);
+  const fieldErrors = guestFieldErrors(details, invitation?.linked ? invitation.arrival_date : today);
   const versions = useRef({ front: 0, back: 0 });
 
   useEffect(() => {
@@ -41,15 +43,15 @@ export default function GuestCheckinPage() {
     versions.current.front++; versions.current.back++;
     if (!clientAvailable()) return;
     setBusy(true);
-    (token ? openInvitation(token) : openPublicCheckin()).then(row => {
+    (token ? openInvitation(token) : openPublicCheckin(propertyId)).then(row => {
       if (active) {
         setInvitation(row);
-        setDetails(previous => ({ ...previous, email: row.email || '' }));
+        setDetails(previous => ({ ...previous, email: row.email || '', full_name:row.full_name||'',arrival_date:row.arrival_date||'',departure_date:row.departure_date||'' }));
       }
     }).catch(err => { if (active) setError(guestError(err)); })
       .finally(() => { if (active) setBusy(false); });
     return () => { active = false; };
-  }, [token]);
+  }, [token,propertyId]);
 
   useEffect(() => {
     const refresh = () => setToday(propertyToday());
@@ -64,15 +66,15 @@ export default function GuestCheckinPage() {
       onBlur: () => setTouched(previous => ({ ...previous, [name]: true })) };
   }
 
-  function choosePhoto(side, file) {
+  async function choosePhoto(side, file) {
     if (!file) return;
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      setError('Choose a JPEG, PNG or WebP photo.'); return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      setError('Each original photo must be 10 MB or smaller.'); return;
-    }
-    setError(''); setCropDraft({ side, file });
+    const version = ++versions.current[side];
+    setError(''); setProcessing(previous => ({ ...previous, [side]: true }));
+    try {
+      const prepared = await prepareMobilePhoto(file);
+      if (versions.current[side] === version) setCropDraft({ side, file: prepared });
+    } catch (err) { if (versions.current[side] === version) setError(guestError(err)); }
+    finally { if (versions.current[side] === version) setProcessing(previous => ({ ...previous, [side]: false })); }
   }
 
   async function applyCrop(crop) {
@@ -98,13 +100,13 @@ export default function GuestCheckinPage() {
     setError('');
     setTouched(Object.fromEntries(Object.keys(details).map(key => [key, true])));
     try {
-      const invalid = guestFieldErrors(details, propertyToday());
+      const invalid = guestFieldErrors(details, invitation?.linked ? invitation.arrival_date : propertyToday());
       if (Object.keys(invalid).length) {
         const name = Object.keys(invalid)[0];
         const input = event.currentTarget.querySelector('[name="' + name + '"]');
         input?.focus(); input?.scrollIntoView({ block: 'center', behavior: 'smooth' });
       }
-      const cleaned = validateGuestDetails(details, propertyToday());
+      const cleaned = validateGuestDetails(details, invitation?.linked ? invitation.arrival_date : propertyToday());
       if (cropDraft || processing.front || processing.back || !photos.front || !photos.back) {
         throw new Error('Please choose both document photos and wait for compression.');
       }
@@ -198,8 +200,8 @@ export default function GuestCheckinPage() {
                         setTouched(previous => ({ ...previous, phone: true }));
                       }} />
 <Input className="min-h-12 min-w-0 !text-base sm:!text-sm" label="Email" name="email" {...liveProps("email")} type="email" autoComplete="email" required maxLength={254} value={details.email} onChange={update} /></div></section>
-<section className="rounded-2xl border border-slate-200 p-4 sm:p-5"><h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-slate-900"><CalendarDays size={18} />Stay dates</h2><div className="grid gap-4 sm:grid-cols-2"><Input className="min-h-12 min-w-0 !text-base sm:!text-sm" label="Date of arrival" name="arrival_date" {...liveProps("arrival_date")} type="date" min={today} required value={details.arrival_date} onChange={update} />
-<Input className="min-h-12 min-w-0 !text-base sm:!text-sm" label="Departure date" name="departure_date" {...liveProps("departure_date")} type="date" min={details.arrival_date && details.arrival_date > today ? details.arrival_date : today} required value={details.departure_date} onChange={update} /></div></section>
+<section className="rounded-2xl border border-slate-200 p-4 sm:p-5"><h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-slate-900"><CalendarDays size={18} />Stay dates</h2><div className="grid gap-4 sm:grid-cols-2"><Input className="min-h-12 min-w-0 !text-base sm:!text-sm" label="Date of arrival" name="arrival_date" {...liveProps("arrival_date")} type="date" readOnly={!!invitation?.linked} min={invitation?.linked?invitation.arrival_date:today} required value={details.arrival_date} onChange={update} />
+<Input className="min-h-12 min-w-0 !text-base sm:!text-sm" label="Departure date" name="departure_date" {...liveProps("departure_date")} type="date" readOnly={!!invitation?.linked} min={details.arrival_date && details.arrival_date > today ? details.arrival_date : today} required value={details.departure_date} onChange={update} /></div></section>
 <section className="rounded-2xl border border-slate-200 p-4 sm:p-5"><h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-slate-900"><MapPin size={18} />Travel information</h2><div className="mb-4 grid gap-4 sm:grid-cols-2"><Input className="min-h-12 min-w-0 !text-base sm:!text-sm" label="Coming from" name="coming_from" {...liveProps("coming_from")} required maxLength={150} value={details.coming_from} onChange={update} /><Input className="min-h-12 min-w-0 !text-base sm:!text-sm" label="Going to" name="going_to" {...liveProps("going_to")} required maxLength={150} value={details.going_to} onChange={update} /></div>
                 <label className="flex min-h-14 items-center gap-3 rounded-xl bg-slate-50 p-4 text-sm text-slate-700"><input className="h-5 w-5 shrink-0 accent-slate-900" type="checkbox" checked={details.foreign_guest} onChange={event => {
                   setDetails(previous => ({ ...previous, foreign_guest: event.target.checked }));
@@ -213,7 +215,7 @@ export default function GuestCheckinPage() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     {['front', 'back'].map(side => <PhotoUploadCard key={side} side={side}
                       label={details.foreign_guest ? (side === 'front' ? 'Passport front' : 'Visa') : (side === 'front' ? 'ID front side' : 'ID back side')}
-                      photo={photos[side]} processing={processing[side]} disabled={busy || !!cropDraft}
+                      photo={photos[side]} processing={processing[side]} disabled={busy || !!cropDraft || processing.front || processing.back}
                       onChoose={choosePhoto} onCrop={side => setCropDraft({ side, file: originals[side] })} />)}
                   </div>
                 </section>

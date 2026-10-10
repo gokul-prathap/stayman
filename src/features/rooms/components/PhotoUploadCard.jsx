@@ -12,7 +12,7 @@ export default function PhotoUploadCard({ side, label, photo, processing, disabl
         <label className={'relative flex min-h-12 flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 text-sm font-medium text-slate-600 focus-within:ring-2 focus-within:ring-slate-400 ' + (disabled ? 'opacity-40' : 'hover:bg-slate-100')}>
           {processing ? <LoaderCircle size={18} className="animate-spin" /> : <ImagePlus size={18} />}
           {processing ? 'Preparing...' : photo ? 'Replace photo' : 'Choose photo'}
-          <input type="file" aria-label={'Choose ' + label} accept="image/jpeg,image/png,image/webp" disabled={disabled}
+          <input type="file" aria-label={'Choose ' + label} accept="image/*,.heic,.heif" disabled={disabled}
             className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
             onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) onChoose(side, file); }} />
         </label>
@@ -21,7 +21,7 @@ export default function PhotoUploadCard({ side, label, photo, processing, disabl
           <Crop size={16} />Crop
         </button>}
       </div>
-      <p className="mt-2 text-xs text-slate-400">JPEG, PNG or WebP · up to 10 MB</p>
+      <p className="mt-2 text-xs text-slate-400">Mobile photos, including HEIC · up to 10 MB</p>
     </div>
   );
 }

@@ -1,32 +1,8 @@
-import React from 'react';
-import { MOCK_UNITS } from '../../allocation/data/mockAllocationData';
-
+import { usePropertyData } from '../../reservations/hooks/usePropertyData';
+import { money } from '../../management/utils/metrics';
+import PageState from '../../management/components/PageState';
+import '../../management/management.css';
 export default function RoomsPage() {
-  return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-slate-900">Rooms & Bookable Inventory</h1>
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-slate-100 border-b text-xs font-bold uppercase text-slate-600">
-            <tr>
-              <th className="p-3">Room / Unit</th>
-              <th className="p-3">Category</th>
-              <th className="p-3">Type</th>
-              <th className="p-3">Operational State</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y text-slate-800">
-            {MOCK_UNITS.map((u) => (
-              <tr key={u.id} className="hover:bg-slate-50">
-                <td className="p-3 font-semibold">{u.label} <span className="text-slate-400 font-normal">({u.roomName})</span></td>
-                <td className="p-3">{u.category}</td>
-                <td className="p-3">{u.type}</td>
-                <td className="p-3"><span className="px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-800">Active</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+ const {data,isPending,error,refresh}=usePropertyData();
+ return <section className="management space-y-5"><h1>Rooms & Beds</h1><p className="subtitle">Bookable inventory saved for this property.</p><PageState pending={isPending} error={error} retry={refresh}/>{data && !error && <div className="card overflow-x-auto"><table><thead><tr><th>Room</th><th>Bed / unit</th><th>Type</th><th>Gender policy</th><th>Nightly rate</th></tr></thead><tbody>{data.units.map(u=><tr key={u.id}><td>{u.roomName}</td><td>{u.label}</td><td>{u.type==='ROOM'?'Private room':'Dorm bed'}</td><td>{u.genderPolicy}</td><td>{money(u.nightlyRatePaise)}</td></tr>)}{!data.units.length && <tr><td colSpan={5}>No units configured. Add this property's beds to stayman_units in Supabase.</td></tr>}</tbody></table></div>}</section>;
 }
