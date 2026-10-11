@@ -3,7 +3,7 @@ import { addDays, format, parseISO, startOfDay } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { moveError, nextDay } from '../utils/allocationMove';
 import { usePropertyData } from '../../reservations/hooks/usePropertyData';
-import { databaseError, transferReservation } from '../../../services/stayman';
+import { databaseError, transferReservation, releaseMaintenance } from '../../../services/stayman';
 import NewReservationModal from '../../../components/reservations/NewReservationModal';
 import { Drawer } from '../../../components/ui/Drawer';
 import  Modal  from '../../../components/ui/Modal';
@@ -22,6 +22,8 @@ export default function AllocationPage() {
   const [dragId, setDragId] = useState(null);
   const [pendingMove, setPendingMove] = useState(null);
   const [moveMessage, setMoveMessage] = useState('');
+  const [maintenance,setMaintenance]=useState(null);
+  const [releaseError,setReleaseError]=useState('');
 
   function requestMove(stayId, unitId, day) {
     const stay = allocations.find(item => item.id === stayId);
@@ -66,26 +68,26 @@ export default function AllocationPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Bed Allocation Matrix</h1>
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Bed Allocation Matrix</h1>
           <p className="text-sm text-slate-500">Drag a reservation to a free bed. Only the dropped night moves; confirm before moving.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center bg-white border border-slate-300 rounded-lg overflow-hidden shadow-sm">
-            <button onClick={handlePrev} className="p-2 hover:bg-slate-100 text-slate-600">
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-3 xl:w-auto xl:shrink-0">
+          <div className="flex w-full min-w-0 items-center justify-between bg-white border border-slate-300 rounded-lg overflow-hidden shadow-sm sm:w-auto">
+            <button aria-label="Previous week" onClick={handlePrev} className="shrink-0 p-3 hover:bg-slate-100 text-slate-600">
               <ChevronLeft className="w-5 h-5" />
             </button>
-            <span className="px-3 text-sm font-semibold text-slate-800">
+            <span className="whitespace-nowrap px-1 text-xs sm:px-3 sm:text-sm font-semibold text-slate-800">
               {format(startDate, 'dd MMM yyyy')} - {format(days[6], 'dd MMM yyyy')}
             </span>
-            <button onClick={handleNext} className="p-2 hover:bg-slate-100 text-slate-600">
+            <button aria-label="Next week" onClick={handleNext} className="shrink-0 p-3 hover:bg-slate-100 text-slate-600">
               <ChevronRight className="w-5 h-5" />
             </button>
           </div>
           <button
             onClick={() => setCreateModal({ isOpen: true, unitId: units[0]?.id, date: format(startDate, 'yyyy-MM-dd') })}
-            disabled={!units.length} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium text-sm shadow-sm"
+            disabled={!units.length} className="flex w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap sm:w-auto px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium text-sm shadow-sm"
           >
             <Plus className="w-4 h-4" /> New Booking
           </button>
@@ -127,7 +129,7 @@ export default function AllocationPage() {
                     if (alloc.status === 'MAINTENANCE') {
                       return (
                         <td key={day.toISOString()} title={alloc.reason || "maintenance"} className="p-1 border border-dashed border-stone-400 bg-stone-100 text-stone-600 text-center text-xs">
-                          <div className="rounded border border-dashed border-stone-400 p-2"><span className="font-semibold block">Maintenance</span><span className="block max-w-40 truncate">{alloc.reason || "maintenance"}</span></div>
+                          <button type="button" className="w-full rounded border border-dashed border-stone-400 p-2" onClick={()=>{setMaintenance(alloc);setReleaseError('');}}><span className="font-semibold block">Maintenance</span><span className="block max-w-40 truncate">{alloc.reason || "maintenance"}</span><span className="block mt-1 underline">Release bed</span></button>
                         </td>
                       );
                     }
@@ -195,6 +197,9 @@ export default function AllocationPage() {
           <div className="rounded-lg bg-blue-50 p-3 text-sm"><p>Total: {money(pendingMove.quote.totalBefore)} → {money(pendingMove.quote.newTotal)}</p><p>Already paid: {money(pendingMove.quote.paid)}</p><p>{pendingMove.quote.refund ? 'Refund due: '+money(pendingMove.quote.refund) : 'Balance due: '+money(pendingMove.quote.due)}</p><p className="mt-2 text-xs">Paid amounts stay recorded. No money is automatically refunded or collected.</p></div>
           <div className="flex justify-end gap-3"><button className="min-h-11 rounded-lg border px-4" disabled={moving} onClick={() => setPendingMove(null)}>Cancel</button><button className="min-h-11 rounded-lg bg-brand-600 px-4 text-white" disabled={moving} onClick={confirmMove}>{moving ? "Moving…" : "Confirm move"}</button></div>
         </div>}
+      </Modal>
+      <Modal isOpen={!!maintenance} onClose={()=>{if(!moving)setMaintenance(null);}} title="Release maintenance">
+       {maintenance&&<div className="space-y-4"><p>Make this bed available again?</p><p className="text-sm text-slate-500">{units.find(u=>u.id===maintenance.unitId)?.label} · {maintenance.checkInDate} to {maintenance.checkOutDate} · {maintenance.reason}</p><p className="text-sm">This releases the entire selected maintenance block.</p>{releaseError&&<p role="alert" className="text-red-600">{releaseError}</p>}<div className="flex gap-2"><button disabled={moving} className="rounded-lg border px-4 py-2" onClick={()=>setMaintenance(null)}>Keep maintenance</button><button disabled={moving} className="rounded-lg bg-brand-600 px-4 py-2 text-white" onClick={async()=>{setMoving(true);setReleaseError('');try{await releaseMaintenance(maintenance.id);setMaintenance(null);await refresh();setMoveMessage('Maintenance released. Bed is available.');}catch(e){setReleaseError(databaseError(e));}finally{setMoving(false);}}}>{moving?'Releasing...':'Confirm release'}</button></div></div>}
       </Modal>
       <NewReservationModal isOpen={createModal.isOpen} units={units} allocations={allocations}
         defaultUnitId={createModal.unitId} defaultDate={createModal.date}

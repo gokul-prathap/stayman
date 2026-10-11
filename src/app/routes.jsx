@@ -12,6 +12,7 @@ import StaffGate from '../components/auth/StaffGate';
 const GuestsPage = lazy(() => import('../features/rooms/pages/GuestsPage'));
 
 const ReportsPage = lazy(() => import('../features/management/pages/ReportsPage'));
+const ExpensesPage = lazy(() => import('../features/management/pages/ExpensesPage'));
 const PricingPage = lazy(() => import('../features/management/pages/PricingPage'));
 const SettingsPage = lazy(() => import('../features/rooms/pages/SettingsPage'));
 
@@ -26,6 +27,7 @@ export function AppRoutes() {
         <Route path="/rooms" element={<RoomsPage />} />
         <Route path="/guests" element={<GuestsPage />} />
         <Route path="/housekeeping" element={<HousekeepingPage />} />
+        <Route path="/expenses" element={<ExpensesPage />} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/settings" element={<SettingsPage />} />

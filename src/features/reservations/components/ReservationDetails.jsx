@@ -1,7 +1,9 @@
+import ExtendStay from './ExtendStay';
+import GuestSubmission from './GuestSubmission';
 import BookingWebCheckin from './BookingWebCheckin';
 import EditReservation from './EditReservation';
 import {refundSummary} from '../../management/utils/guestOperations';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { usePropertyData } from '../hooks/usePropertyData';
 import { useStaff } from '../../../components/auth/StaffGate';
 import { recordPayment, recordRefund, cancelReservation, checkInReservation, transferReservation, databaseError } from '../../../services/stayman';
@@ -15,12 +17,18 @@ export default function ReservationDetails({ reservationId }) {
  const [targetId,setTargetId]=useState(''),[from,setFrom]=useState(''),[to,setTo]=useState('');
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
  const request=useRef(null);
+ useEffect(()=>{refresh();const timer=setInterval(()=>refresh(),30000);return()=>clearInterval(timer);},[reservationId]);
+ const [showSubmission,setShowSubmission]=useState(false);
  const reservation=data?.reservations.find(r=>r.id===reservationId);
  if(!reservation) return <p>Reservation unavailable. Refresh and try again.</p>;
  const guest=data.guests.find(g=>g.id===reservation.guest_id), today=dayInZone(new Date(),property.timezone);
  const balance=Number(reservation.total_amount)-Number(reservation.paid_amount);
  const refundable=reservation.status==='CANCELLED' ? Number(reservation.paid_amount) : Math.max(0,-balance);
  const active=['PENDING','CHECKED_IN'].includes(reservation.status);
+ const members=(data.members||[]).filter(m=>m.reservation_id===reservation.id);
+ const submitted=members.filter(m=>m.status==='completed');
+ const leadSubmission=submitted.find(m=>m.guest_id===guest?.id);
+
  const refund=refundSummary(reservation,data.payments);
  const payments=data.payments.filter(p=>p.reservation_id===reservation.id);
  const canCheckIn=reservation.status==='PENDING' && today>=reservation.check_in_date && today<reservation.check_out_date;
@@ -61,10 +69,12 @@ export default function ReservationDetails({ reservationId }) {
  }
  return <div className="management space-y-5">
   <div><p className="muted">{reservation.booking_ref}</p><div className="mt-1 flex flex-wrap justify-between gap-2"><h2>{guest?.full_name}</h2><span className="text-xs font-semibold">{reservation.status.replaceAll('_',' ')}</span></div><p className="muted mt-1">{guest?.phone} {guest?.email?' · '+guest.email:''}</p></div>
+  <div className="rounded-xl border bg-emerald-50 p-4 space-y-2"><strong className="text-sm">Web check-in: {submitted.length}/{members.length} guests completed</strong><p className="text-xs">Booking contact: {leadSubmission?'Web check-in done · ID submitted':'Web check-in not linked / not done'}</p>{submitted.length>0&&<button className="secondary" onClick={()=>setShowSubmission(v=>!v)}>{showSubmission?'Hide guest submissions':'View submitted guest details & IDs'}</button>}{showSubmission&&submitted.map(m=><div key={m.id} className="rounded-lg border bg-white p-3"><h3 className="mb-3 font-semibold">{m.display_name}</h3><GuestSubmission submission={m}/></div>)}{!leadSubmission&&<p className="text-xs">Use Group web check-in below to link a submitted walk-in or add the booking contact. Matching is explicit to avoid showing someone else's ID.</p>}</div>
   <div className="grid grid-cols-2 gap-4 text-sm"><div><p className="muted">Arrival</p><p>{reservation.check_in_date}</p></div><div><p className="muted">Departure</p><p>{reservation.check_out_date}</p></div></div>
   <div className="space-y-2">{data.allocations.filter(a=>a.reservationDbId===reservation.id).map(a=>{const u=data.units.find(u=>u.id===a.unitId);return <p key={a.id} className="muted">{u?.roomName} / {u?.label} · {a.checkInDate} → {a.checkOutDate}</p>;})}</div>
-  {active && !panel && <div className="flex flex-wrap gap-2">{reservation.status==='PENDING' && <button className="primary" disabled={busy || !canCheckIn} title={canCheckIn?'Check in guest':'Check-in is available during the booked dates'} onClick={()=>run(()=>checkInReservation(reservation.id),'Guest checked in.')}>Check in guest</button>}<button className="secondary" disabled={busy} onClick={()=>open('edit')}>Edit reservation</button><button className="secondary" disabled={busy} onClick={()=>open('move')}>Move bed / room</button><button className="secondary text-red-600" disabled={busy} onClick={()=>open('cancel')}>Cancel reservation</button></div>}
+  {active && !panel && <div className="flex flex-wrap gap-2">{reservation.status==='PENDING' && <button className="primary" disabled={busy || !canCheckIn} title={canCheckIn?'Check in guest':'Check-in is available during the booked dates'} onClick={()=>run(()=>checkInReservation(reservation.id),'Guest checked in.')}>Check in guest</button>}<button className="secondary" disabled={busy} onClick={()=>open('edit')}>Edit reservation</button><button className="secondary" disabled={busy} onClick={()=>open('extend')}>Extend stay</button><button className="secondary" disabled={busy} onClick={()=>open('move')}>Move bed / room</button><button className="secondary text-red-600" disabled={busy} onClick={()=>open('cancel')}>Cancel reservation</button></div>}
   {reservation.status==='CANCELLED' && <div className="notice"><strong>Cancelled:</strong> {reservation.cancellation_reason}<p className="mt-2">Beds have been released. Recorded payments are retained; any refund must be recorded separately.</p></div>}
+  {panel==='extend'&&<ExtendStay reservation={reservation} guest={guest} allocations={data.allocations} units={data.units} onSaved={refresh} onClose={()=>setPanel('')}/>}
   {panel==='edit' && <EditReservation reservation={reservation} guest={guest} allocations={data.allocations} units={data.units} onSaved={refresh} onClose={()=>setPanel('')}/>}
   {(refund.pending>0 || refund.done>0) && <div className="notice"><strong>Refund {refund.status.toLowerCase()}</strong><p className="mt-2">Pending: {money(refund.pending)} · Returned: {money(refund.done)}</p><p className="muted mt-2">Use Record refund after returning the money. Partial refunds remain pending.</p></div>}
   <div className="rounded-xl border border-[#e7edf5] bg-[#f8faff] p-4"><div className="flex justify-between gap-2"><h2>Payment Details</h2><span className="text-xs font-semibold">{reservation.status==='CANCELLED'?'Cancelled':balance<0?'Refund due':balance===0?'Paid in full':Number(reservation.paid_amount)>0?'Partially paid':'Unpaid'}</span></div>

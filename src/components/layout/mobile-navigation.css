@@ -1,0 +1,7 @@
+.staff-mobile-nav{display:none}
+@media(max-width:767px){
+.staff-mobile-nav{display:flex;justify-content:space-around;align-items:center;gap:3px;background:#f9fbff;border-top:1px solid #e2ebfb;padding:8px 8px calc(8px + env(safe-area-inset-bottom));flex-shrink:0}
+.staff-mobile-nav a,.staff-mobile-nav button{display:flex;flex-direction:column;align-items:center;gap:5px;color:#6680ae;font-size:9px;min-width:60px;min-height:42px;justify-content:center}
+.staff-mobile-nav a[aria-current=page],.staff-mobile-nav button[aria-expanded=true]{color:#315fff;font-weight:650}
+.staff-mobile-nav svg{width:18px;height:18px}
+}

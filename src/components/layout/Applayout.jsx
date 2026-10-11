@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStaff } from '../auth/StaffGate';
-import { Outlet } from 'react-router-dom';
+import { Outlet,NavLink,useLocation } from 'react-router-dom';
+import {LayoutDashboard,CalendarRange,BookOpenCheck,Menu} from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
+import './mobile-navigation.css';
 
 export function AppLayout() {
   const { property: currentProperty } = useStaff();
+  const dashboard=useLocation().pathname==='/';
   const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
   const [expanded, setExpanded] = useState(true);
   const introTimer = useRef(null);
@@ -31,7 +34,7 @@ export function AppLayout() {
     return () => window.removeEventListener('keydown', escape);
   }, [mobile, expanded]);
   return (
-    <div className="flex h-[100dvh] w-full overflow-hidden bg-[#f5f8fd]">
+    <div className={'flex h-[100dvh] w-full overflow-hidden bg-[#f5f8fd] '+(dashboard?'dashboard-layout':'')}>
       {mobile && expanded && <button type="button" aria-label="Close navigation" onClick={() => changeExpanded(false)}
         className="fixed inset-0 z-40 bg-slate-950/50" />}
       <Sidebar expanded={expanded} mobile={mobile} onToggle={() => changeExpanded(!expanded)}
@@ -39,6 +42,7 @@ export function AppLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar expanded={expanded} onToggle={() => changeExpanded(!expanded)} />
         <main className="flex-1 overflow-y-auto p-4 sm:p-6"><Outlet key={currentProperty.id} /></main>
+        <nav className="staff-mobile-nav" aria-label="Mobile navigation"><NavLink end to="/"><LayoutDashboard/>Dashboard</NavLink><NavLink to="/allocation"><CalendarRange/>Tape Chart</NavLink><NavLink to="/reservations"><BookOpenCheck/>Bookings</NavLink><button type="button" onClick={()=>changeExpanded(true)} aria-label="More navigation" aria-controls="main-sidebar" aria-expanded={expanded}><Menu/>More</button></nav>
       </div>
     </div>
   );

@@ -5,7 +5,7 @@ export function db() {
 }
 export function databaseError(error) {
   if (error?.code === '23P01') return 'This bed is occupied or under maintenance for the selected dates. Refresh and choose another bed.';
-  if (/schema cache|does not exist/i.test(error?.message || '')) return 'Database setup is missing. Apply Stayman migrations 006 through 010, then configure the property.';
+  if (/schema cache|does not exist/i.test(error?.message || '')) return 'Database setup is missing. Apply Stayman migrations 006 through 013, then configure the property.';
   return error?.message || 'Unable to save. Please try again.';
 }
 export async function staffProperties() {
@@ -88,3 +88,9 @@ export const editReservation=(id,details,expected)=>mutation('stayman_edit_reser
 export const attachWalkin=(id,invitation,asContact=false)=>mutation('stayman_attach_walkin',{p_reservation:id,p_invitation:invitation,p_as_contact:asContact});
 export const guestCheckinLink=id=>mutation('stayman_guest_checkin_link',{p_guest:id});
 export const bindBookingMember=(guest,member)=>mutation('stayman_bind_member',{p_guest:guest,p_member:member});
+
+export const guestDirectory=(property,search,filter,checkin,page,size)=>mutation('stayman_guest_directory',{p_property:property,p_search:search,p_filter:filter,p_checkin:checkin,p_page:page,p_size:size});
+export const guestProfile=(property,kind,id)=>mutation('stayman_guest_profile',{p_property:property,p_kind:kind,p_id:id});
+export const renameGuest=(property,kind,id,name)=>mutation('stayman_rename_guest',{p_property:property,p_kind:kind,p_id:id,p_name:name});
+export const releaseMaintenance=id=>mutation('stayman_release_maintenance',{p_allocation:id});
+export const extendStay=(id,target,depart,checkout,total,extra,request)=>mutation('stayman_extend_stay',{p_reservation:id,p_target:target,p_depart:depart,p_expected_checkout:checkout,p_expected_total:total,p_expected_extra:extra,p_request:request});
