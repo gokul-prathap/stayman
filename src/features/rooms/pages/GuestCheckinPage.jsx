@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { ArrowRight, CheckCircle2, FileCheck2, ShieldCheck, UserRound, CalendarDays, MapPin } from 'lucide-react';
+import { ArrowRight, CheckCircle2, FileCheck2, ShieldCheck, UserRound, CalendarDays, MapPin, MessageCircle } from 'lucide-react';
 import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
 import PhoneInput from '../components/PhoneInput';
@@ -12,14 +12,21 @@ import DocumentPreview from '../components/DocumentPreview';
 import ImageCropDialog from '../components/ImageCropDialog';
 import PhotoUploadCard from '../components/PhotoUploadCard';
 import { validateGuestDetails, guestFieldErrors, propertyToday } from '../utils/guestCheckinValidation';
-import { client, openInvitation, openPublicCheckin, guestError, compressIdentityImage, submitGuestCheckin } from '../services/guestCheckinService';
+import { loadPublicProperty, client, openInvitation, openPublicCheckin, guestError, compressIdentityImage, submitGuestCheckin } from '../services/guestCheckinService';
 
+function Instagram({size=20}) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>;
+}
+function Facebook({size=20}) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14 21v-8h3l.5-4H14V7c0-1.2.4-2 2-2h2V1.4A24 24 0 0 0 15 1c-3 0-5 1.9-5 5.4V9H7v4h3v8z"/></svg>;
+}
 const initial = { full_name: '', email: '', phone: '', phone_country: 'IN', arrival_date: '', departure_date: '', coming_from: '', going_to: '', foreign_guest: false };
 
 export default function GuestCheckinPage() {
   const location = useLocation();
   const token = new URLSearchParams(location.hash.slice(1)).get('invite') || new URLSearchParams(location.search).get('invite') || '';
   const propertyId=new URLSearchParams(location.search).get('property')||'';
+  const [profile, setProfile] = useState(property);
   const [invitation, setInvitation] = useState(null);
   const [details, setDetails] = useState(initial);
   const [photos, setPhotos] = useState({});
@@ -34,6 +41,15 @@ export default function GuestCheckinPage() {
   const [today, setToday] = useState(propertyToday);
   const fieldErrors = guestFieldErrors(details, invitation?.linked ? invitation.arrival_date : today);
   const versions = useRef({ front: 0, back: 0 });
+
+  useEffect(() => {
+    let active = true;
+    setProfile(property);
+    if (clientAvailable()) loadPublicProperty(propertyId, token).then(row => {
+      if (active && row) setProfile({ ...property, ...row });
+    }).catch(() => { /* Keep configured links while migration 011 is being installed. */ });
+    return () => { active = false; };
+  }, [propertyId, token]);
 
   useEffect(() => {
     let active = true;
@@ -132,12 +148,12 @@ export default function GuestCheckinPage() {
     <main className="guest-modern min-h-[100dvh] bg-slate-50 px-3 py-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-12">
       <div className="mx-auto max-w-[1100px]">
         <header className="mb-5 flex items-center justify-between px-1">
-          <div className="flex items-center gap-3"><img src={property.logo} alt={property.name} className="h-20 w-20 rounded-2xl object-contain sm:h-24 sm:w-24" />
-            <div><span className="text-lg font-bold tracking-tight text-slate-900">{property.name}</span><p className="text-xs text-slate-500">{property.description}</p></div></div>
-          <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><ShieldCheck size={15} />Guest check-in</span>
+          <div className="flex items-center gap-3"><img src={property.logo} alt={profile.name} className="h-20 w-20 rounded-2xl object-contain sm:h-24 sm:w-24" />
+            <div><span className="text-lg font-bold tracking-tight text-slate-900">{profile.name}</span><p className="text-xs text-slate-500">{property.description}</p></div></div>
+          <div className="flex items-center gap-3">{profile.instagram_url && <a href={profile.instagram_url} target="_blank" rel="noopener noreferrer" aria-label="Visit our Instagram" className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 text-slate-700 hover:bg-white"><Instagram size={22}/></a>}<span className="hidden items-center gap-1.5 text-xs font-medium text-slate-500 sm:flex"><ShieldCheck size={15} />Guest check-in</span></div>
         </header>
         <div className="mb-5 rounded-2xl border border-slate-200 bg-white px-5 py-6 sm:px-8">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{completed ? 'Check-in submitted' : reviewing ? 'Review your check-in' : 'Welcome to ' + property.name}</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{completed ? 'Check-in submitted' : reviewing ? 'Review your check-in' : 'Welcome to ' + profile.name}</h1>
           <p className="mt-2 text-sm text-slate-500">Complete your details and add clear ID photos for a smooth arrival.</p>
           <ol className="mt-6 flex items-center gap-3 text-xs sm:gap-5 sm:text-sm" aria-label="Check-in progress">
             {['Details & ID', 'Review', 'Submitted'].map((step, index) => {
@@ -224,6 +240,13 @@ export default function GuestCheckinPage() {
               </fieldset>
             </form>}
         </div>
+        <footer className="mt-6 flex flex-col items-center gap-4 text-center text-sm text-slate-600">
+          {profile.instagram_url && <div className="flex flex-wrap items-center justify-center gap-2"><span>Follow us on Instagram</span><a href={profile.instagram_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 font-semibold underline underline-offset-4"><Instagram size={20}/>{new URL(profile.instagram_url).pathname.replaceAll('/', '') || 'Instagram'}</a></div>}
+          <div className="flex flex-wrap items-center justify-center gap-5">
+            {profile.whatsapp_number && <a href={'https://wa.me/' + profile.whatsapp_number.replace(/\D/g, '')} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2"><MessageCircle size={19}/>WhatsApp {profile.whatsapp_number}</a>}
+            {profile.facebook_url && <a href={profile.facebook_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2"><Facebook size={19}/>Follow us on Facebook</a>}
+          </div>
+        </footer>
         <p className="mt-5 flex items-center justify-center gap-1.5 text-xs text-slate-400"><ShieldCheck size={14} />Documents are stored privately for your check-in.</p>
       </div>
       {cropDraft && <ImageCropDialog key={cropDraft.side} file={cropDraft.file}

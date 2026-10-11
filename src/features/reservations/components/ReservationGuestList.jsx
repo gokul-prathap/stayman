@@ -20,7 +20,7 @@ export default function ReservationGuestList({ guestView = false }) {
   const today=dayInZone(new Date(),property.timezone);
   const matches = guest => [guest?.full_name,guest?.phone,guest?.email].some(value => value?.toLowerCase().includes(search.toLowerCase()));
   const guestBookings = guest => reservations.filter(r => guest.memberReservationId ? r.id===guest.memberReservationId : r.guest_id===guest.id);
-  const people=[...guests,...(data?.members||[]).map(m=>({id:m.id,memberReservationId:m.reservation_id,full_name:m.details?.full_name||m.display_name,phone:m.details?.phone||'Web check-in pending',email:m.details?.email,nationality:m.details?.foreign_guest?'International guest':'Booking member'}))];
+  const people=[...guests,...(data?.members||[]).filter(m=>!m.guest_id).map(m=>({id:m.id,memberReservationId:m.reservation_id,full_name:m.details?.full_name||m.display_name,phone:m.details?.phone||'Web check-in pending',email:m.details?.email,nationality:m.details?.foreign_guest?'International guest':'Booking member'}))];
   const rows = guestView ? people.filter(g => matches(g) && (filter==='all' || stayKind(guestBookings(g),today)===filter))
     : reservations.filter(r => matches(guests.find(g => g.id===r.guest_id)) || r.booking_ref.toLowerCase().includes(search.toLowerCase()));
   return <section className="management space-y-5">

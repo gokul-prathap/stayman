@@ -11,9 +11,10 @@ import { useStaff } from '../auth/StaffGate';
 import { nights, dayInZone, rupeesToPaise, money } from '../../features/management/utils/metrics';
 export default function NewReservationModal({ isOpen, onClose, units = [], allocations = [], defaultUnitId, defaultDate, defaultCheckinId, onSaved }) {
   const { property } = useStaff();
-  const {data}=usePropertyData();
+  const {data,refresh}=usePropertyData();
   const walkins=data?.walkins||[];
   const today = dayInZone(new Date(),property.timezone);
+  useEffect(()=>{if(isOpen)refresh();},[isOpen]);
   const [manualStatus,setManualStatus] = useState(false);
   const [form, setForm] = useState({});
   const [manualTotal,setManualTotal] = useState(false);

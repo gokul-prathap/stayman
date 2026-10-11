@@ -1,5 +1,7 @@
 # Dashboard, grouped web check-in and refunds
 
+For the walk-in inbox, guest profile IDs, QR codes and WhatsApp sharing, apply migration 010 after 009 and see [walkin-inbox.md](walkin-inbox.md). The earlier public-QR limitation described below is resolved by explicit linking in migration 010.
+
 Apply supabase/migrations/202610100009_booking_guest_workflows.sql once in Supabase SQL Editor after migrations 001–008. Redeploy the application afterward. The migration preserves existing completed check-ins.
 
 ## One reservation, several guests

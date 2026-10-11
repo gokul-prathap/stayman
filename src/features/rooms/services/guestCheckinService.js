@@ -88,3 +88,11 @@ export async function submitGuestCheckin(invitation, details, photos) {
 // signal before claiming an invitation. Browsers cannot reliably expose Wi-Fi
 // identity; shared IPs must never be used as proof of guest identity or ownership.
 // Keep authenticated invitation status as the source of "already uploaded".
+
+export async function loadPublicProperty(propertyId, token) {
+  const { data, error } = await client().rpc('guest_property_profile', {
+    p_property: propertyId || null, p_invitation_token: token || null,
+  });
+  if (error) throw error;
+  return data;
+}
