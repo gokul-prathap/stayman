@@ -45,4 +45,20 @@
 }
 
 .dashboard-night-scene{display:none}
+.web-checkin-queue{border:2px solid #abc7ff;background:#f7faff}
+.web-checkin-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-items:stretch;list-style:none;margin:8px 0;padding:2px 8px 2px 2px;max-height:180px;overflow-y:auto;overscroll-behavior-y:contain;scrollbar-gutter:stable}
+.web-checkin-list:focus-visible{outline:2px solid #315fff;outline-offset:4px;border-radius:6px}
+.web-checkin-row{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;padding:6px 10px;border:1px solid #dce5f3;border-radius:8px;background:#fff}
+.web-checkin-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;font-size:13px;font-weight:600;color:#192b43}
+.web-checkin-row .primary{flex-shrink:0;min-height:36px;padding:7px 12px;font-size:12px;white-space:nowrap}
+.web-checkin-row>div:first-child{min-width:0;overflow-wrap:anywhere}
+.web-checkin-row strong{display:block;font-size:16px;color:#192b43}
+.web-checkin-status{display:inline-block;align-self:flex-start;width:fit-content;margin-bottom:10px;padding:4px 9px;border-radius:20px;background:#edf3ff;color:#264ed5;font-size:11px;font-weight:650}
+.web-checkin-status.ready{background:#e8f9f1;color:#087856}
+.web-checkin-row p{margin:5px 0;color:#465875;font-size:13px}
+.web-checkin-row small{color:#465875}
+.web-checkin-buttons{display:flex;flex-wrap:wrap;gap:8px;flex-shrink:0;padding-top:14px;border-top:1px solid #edf2fb}
+.web-checkin-buttons>*{flex:1;text-align:center;display:flex;align-items:center;justify-content:center}
+.web-checkin-queue summary{cursor:pointer;padding:12px 0;font-weight:600}
+@media(max-width:767px){.web-checkin-list{grid-template-columns:minmax(0,1fr);max-height:168px}.web-checkin-queue .dashboard-card-heading{flex-wrap:wrap}}
 @media(max-width:767px){.dashboard-hero{position:relative;isolation:isolate;overflow:hidden}.dashboard-hero>.dashboard-night-scene{display:block;position:absolute;right:-12px;top:-8px;width:220px;height:220px;opacity:.48;z-index:-1}.dashboard-hero>div{position:relative;z-index:1}.dashboard-hero h1{text-shadow:0 1px 8px #142d60}}
