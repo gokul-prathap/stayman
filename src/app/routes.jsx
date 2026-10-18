@@ -15,11 +15,13 @@ const ReportsPage = lazy(() => import('../features/management/pages/ReportsPage'
 const ExpensesPage = lazy(() => import('../features/management/pages/ExpensesPage'));
 const PricingPage = lazy(() => import('../features/management/pages/PricingPage'));
 const SettingsPage = lazy(() => import('../features/rooms/pages/SettingsPage'));
+const PlatformAdminPage = lazy(() => import('../features/admin/PlatformAdminPage'));
 
 export function AppRoutes() {
   return (
     <Suspense fallback={<div role="status" className="p-8 text-sm text-slate-500">Loading Stayman…</div>}><Routes>
       <Route path="/guest-check-in" element={<GuestCheckinPage />} />
+      <Route path="/godfather" element={<PlatformAdminPage />} />
       <Route element={<StaffGate><AppLayout /></StaffGate>}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/allocation" element={<AllocationPage />} />

@@ -2,6 +2,7 @@ import NightScene from '../illustrations/NightScene';
 import React from 'react';
 import { useStaff } from '../auth/StaffGate';
 import { property } from '../../config/property';
+import {propertyLogo} from '../../services/platformAdmin';
 import { PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { 
@@ -38,7 +39,7 @@ export function Sidebar({ expanded, mobile, onToggle, onNavigate }) {
       {(expanded||mobile)&&<div className="sidebar-night-scene" aria-hidden="true"><NightScene transparentSky/></div>}
       <div className="relative z-10 flex h-20 shrink-0 items-center justify-between gap-2 px-3">
         {(expanded || mobile) ? <div className="flex min-w-0 items-center gap-2">
-          <img src={property.logo} alt={staff?.property?.name || property.name} className="h-11 w-11 shrink-0 rounded-lg object-contain" />
+          <img src={propertyLogo(staff?.property?.logo_path) || property.logo} alt={staff?.property?.name || property.name} className="h-11 w-11 shrink-0 rounded-lg object-contain" />
           <div className="min-w-0"><p className="text-base font-bold text-white">{property.appName}</p><p className="truncate text-xs text-slate-300">{staff?.property?.name || property.name}</p></div>
         </div> : null}
         <button type="button" onClick={onToggle} aria-label={expanded ? 'Collapse navigation' : 'Expand navigation'}

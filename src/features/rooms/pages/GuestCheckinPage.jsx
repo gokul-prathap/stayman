@@ -8,6 +8,7 @@ import { getCountryCallingCode } from 'libphonenumber-js/max';
 import '../guestCheckin.css';
 import { prepareMobilePhoto } from '../utils/identityImage';
 import { property } from '../../../config/property';
+import {propertyLogo} from '../../../services/platformAdmin';
 import DocumentPreview from '../components/DocumentPreview';
 import ImageCropDialog from '../components/ImageCropDialog';
 import PhotoUploadCard from '../components/PhotoUploadCard';
@@ -148,7 +149,7 @@ export default function GuestCheckinPage() {
     <main className="guest-modern min-h-[100dvh] bg-slate-50 px-3 py-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-12">
       <div className="mx-auto max-w-[1100px]">
         <header className="mb-5 flex items-center justify-between px-1">
-          <div className="flex items-center gap-3"><img src={property.logo} alt={profile.name} className="h-20 w-20 rounded-2xl object-contain sm:h-24 sm:w-24" />
+          <div className="flex items-center gap-3"><img src={propertyLogo(profile.logo_path) || property.logo} alt={profile.name} className="h-20 w-20 rounded-2xl object-contain sm:h-24 sm:w-24" />
             <div><span className="text-lg font-bold tracking-tight text-slate-900">{profile.name}</span><p className="text-xs text-slate-500">{property.description}</p></div></div>
           <div className="flex items-center gap-3">{profile.instagram_url && <a href={profile.instagram_url} target="_blank" rel="noopener noreferrer" aria-label="Visit our Instagram" className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 text-slate-700 hover:bg-white"><Instagram size={22}/></a>}<span className="hidden items-center gap-1.5 text-xs font-medium text-slate-500 sm:flex"><ShieldCheck size={15} />Guest check-in</span></div>
         </header>
