@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { validateGuestDetails } from '../utils/guestCheckinValidation';
+import {screenIdentityPhoto} from '../utils/identityScreening';
 
 // Separate guest sessions from staff sign-ins and ignore email magic-link callbacks.
 const guestClient = import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -69,8 +70,14 @@ export async function submitGuestCheckin(invitation, details, photos) {
       throw new Error('Please choose both compressed document photos (maximum 1 MB each).');
     }
   }
+  cleaned.document_screening={};
   for (const side of ['front', 'back']) {
     if (!photos[side]) throw new Error('Please choose both document photos.');
+    const screening=await screenIdentityPhoto(photos[side],{side,foreign:cleaned.foreign_guest});
+    if(!screening.accepted&&!screening.manualReview)throw new Error('Review the cropped photo or choose reception review before submitting.');
+    cleaned.document_screening={...cleaned.document_screening,[side]:screening.manualReview?'manual-review':'document-like'};
+  }
+  for (const side of ['front', 'back']) {
     const { error } = await client().storage.from('guest-identities')
       .upload(`${invitation.id}/${side}.jpg`, photos[side], {
         upsert: true, contentType: 'image/jpeg', cacheControl: '0',

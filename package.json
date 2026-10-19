@@ -21,6 +21,7 @@
     "react-dom": "^19.3.0",
     "react-router-dom": "^6.22.3",
     "tailwind-merge": "^2.2.2",
+    "tesseract.js": "^6.0.1",
     "validator": "^13.15.35"
   },
   "devDependencies": {

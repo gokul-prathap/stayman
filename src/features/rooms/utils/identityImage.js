@@ -1,3 +1,4 @@
+import {rectifyDocument} from './documentCrop.js';
 export async function prepareMobilePhoto(file) {
   if (file.size > 10 * 1024 * 1024) throw new Error('Each original photo must be 10 MB or smaller.');
   const heic = /image\/(heic|heif)/i.test(file.type) || /\.(heic|heif)$/i.test(file.name || '');
@@ -24,6 +25,32 @@ export async function prepareMobilePhoto(file) {
 export const TARGET_IMAGE_BYTES = 450 * 1024;
 export const MAX_IMAGE_BYTES = 1024 * 1024;
 
+export function normalizeQuarterTurns(turns) {
+  if(!Number.isInteger(turns))throw new Error('Rotation must use whole quarter turns.');
+  return ((turns%4)+4)%4;
+}
+
+// Always rotate the original rather than repeatedly re-encoding a rotated JPEG.
+export async function rotateIdentityPhoto(file,turns) {
+  const steps=normalizeQuarterTurns(turns);
+  if(!steps)return file;
+  const bitmap=await createImageBitmap(file);
+  try {
+    if(bitmap.width*bitmap.height>64000000)throw new Error('Photo resolution is too large.');
+    const scale=Math.min(1,2200/Math.max(bitmap.width,bitmap.height));
+    const width=Math.max(1,Math.round(bitmap.width*scale)),height=Math.max(1,Math.round(bitmap.height*scale));
+    const canvas=document.createElement('canvas');
+    canvas.width=steps%2?height:width;canvas.height=steps%2?width:height;
+    const context=canvas.getContext('2d');
+    if(!context)throw new Error('Your browser cannot rotate this photo.');
+    context.translate(canvas.width/2,canvas.height/2);context.rotate(steps*Math.PI/2);
+    context.drawImage(bitmap,-width/2,-height/2,width,height);
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+    if(!blob)throw new Error('Could not rotate this photo. Please try again.');
+    return blob;
+  }finally{bitmap.close();}
+}
+
 export function cropPixels(width, height, crop = { x: 0, y: 0, width: 1, height: 1 }) {
   const values = [crop.x, crop.y, crop.width, crop.height];
   if (!values.every(Number.isFinite) || crop.x < 0 || crop.y < 0 ||
@@ -39,6 +66,7 @@ export function cropPixels(width, height, crop = { x: 0, y: 0, width: 1, height:
 export async function compressIdentityImage(file, crop) {
   if (!file.type.startsWith('image/') || /svg|heic|heif/i.test(file.type)) throw new Error('Choose a JPEG, PNG or WebP photo.');
   if (file.size > 10 * 1024 * 1024) throw new Error('Each original photo must be 10 MB or smaller.');
+  if(crop?.corners)return compressIdentityImage(await rectifyDocument(await rotateIdentityPhoto(file,crop.rotation||0),crop.corners));
   const bitmap = await createImageBitmap(file);
   try {
     if (bitmap.width * bitmap.height > 64000000) throw new Error('Photo resolution is too large.');

@@ -7,6 +7,7 @@ import PhoneInput from '../components/PhoneInput';
 import { getCountryCallingCode } from 'libphonenumber-js/max';
 import '../guestCheckin.css';
 import { prepareMobilePhoto } from '../utils/identityImage';
+import {screenIdentityPhoto,photoScreening,requestManualDocumentReview} from '../utils/identityScreening';
 import { property } from '../../../config/property';
 import {propertyLogo} from '../../../services/platformAdmin';
 import DocumentPreview from '../components/DocumentPreview';
@@ -33,6 +34,7 @@ export default function GuestCheckinPage() {
   const [photos, setPhotos] = useState({});
   const [originals, setOriginals] = useState({});
   const [cropDraft, setCropDraft] = useState(null);
+  const [cropReview,setCropReview]=useState(null);
   const [reviewing, setReviewing] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -56,7 +58,7 @@ export default function GuestCheckinPage() {
     let active = true;
     setInvitation(null); setDetails(initial); setError('');
     setReviewing(false); setConfirmed(false); setTouched({});
-    setPhotos({}); setProcessing({}); setOriginals({}); setCropDraft(null);
+    setPhotos({}); setProcessing({}); setOriginals({}); setCropDraft(null);setCropReview(null);
     versions.current.front++; versions.current.back++;
     if (!clientAvailable()) return;
     setBusy(true);
@@ -85,6 +87,7 @@ export default function GuestCheckinPage() {
 
   async function choosePhoto(side, file) {
     if (!file) return;
+    setCropReview(null);
     const version = ++versions.current[side];
     setError(''); setProcessing(previous => ({ ...previous, [side]: true }));
     try {
@@ -97,10 +100,12 @@ export default function GuestCheckinPage() {
   async function applyCrop(crop) {
     const { side, file } = cropDraft;
     const version = ++versions.current[side];
-    setProcessing(previous => ({ ...previous, [side]: true })); setError('');
+    setProcessing(previous => ({ ...previous, [side]: true })); setError('');setCropReview(null);
     try {
       const blob = await compressIdentityImage(file, crop);
+      const screening=await screenIdentityPhoto(blob,{side,foreign:details.foreign_guest});
       if (versions.current[side] === version) {
+        if(!screening.accepted){setCropReview({side,blob,file,version});return;}
         setPhotos(previous => ({ ...previous, [side]: blob }));
         setOriginals(previous => ({ ...previous, [side]: file }));
         setCropDraft(null);
@@ -110,6 +115,14 @@ export default function GuestCheckinPage() {
     } finally {
       if (versions.current[side] === version) setProcessing(previous => ({ ...previous, [side]: false }));
     }
+  }
+
+  function acceptForReceptionReview(){
+    if(!cropReview||versions.current[cropReview.side]!==cropReview.version)return;
+    const {side,blob,file}=cropReview;
+    requestManualDocumentReview(blob,{side,foreign:details.foreign_guest});
+    setPhotos(previous=>({...previous,[side]:blob}));setOriginals(previous=>({...previous,[side]:file}));
+    setCropDraft(null);setCropReview(null);setError('');
   }
 
   async function submit(event) {
@@ -193,6 +206,7 @@ export default function GuestCheckinPage() {
                 <DocumentPreview blob={photos.front} label={details.foreign_guest ? 'Passport front' : 'ID front side'} />
                 <DocumentPreview blob={photos.back} label={details.foreign_guest ? 'Visa' : 'ID back side'} />
               </div>
+              {Object.values(photos).some(photo=>photoScreening(photo)?.manualReview)&&<p role="status" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Your documents need reception review. You can submit your details now; please bring the original ID to reception.</p>}
               <label className="flex items-start gap-2 text-sm text-slate-700">
                 <input type="checkbox" required checked={confirmed} disabled={busy} className="mt-0.5 h-5 w-5 shrink-0 accent-slate-900"
                   onChange={event => setConfirmed(event.target.checked)} />
@@ -223,17 +237,17 @@ export default function GuestCheckinPage() {
                 <label className="flex min-h-14 items-center gap-3 rounded-xl bg-slate-50 p-4 text-sm text-slate-700"><input className="h-5 w-5 shrink-0 accent-slate-900" type="checkbox" checked={details.foreign_guest} onChange={event => {
                   setDetails(previous => ({ ...previous, foreign_guest: event.target.checked }));
                   versions.current.front++; versions.current.back++;
-                  setPhotos({}); setProcessing({}); setOriginals({}); setCropDraft(null);
+                  setPhotos({}); setProcessing({}); setOriginals({}); setCropDraft(null);setCropReview(null);
                 }} />I am a foreign guest (passport and visa required)</label>
                 </section>
                 <section className="rounded-2xl border border-slate-200 p-4 sm:p-5">
                   <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900"><FileCheck2 size={20} />Identity documents</h2>
-                  <p className="mb-4 mt-1 text-sm text-slate-500">Choose a clear photo, then crop out the background.</p>
+                  <p className="mb-4 mt-1 text-sm text-slate-500">Upload your government ID (front and back), or passport and visa for foreign guests. We look for the four corners and straighten the photo. If the automatic text check is uncertain, you can submit it for reception review.</p>
                   <div className="grid gap-4 sm:grid-cols-2">
                     {['front', 'back'].map(side => <PhotoUploadCard key={side} side={side}
                       label={details.foreign_guest ? (side === 'front' ? 'Passport front' : 'Visa') : (side === 'front' ? 'ID front side' : 'ID back side')}
-                      photo={photos[side]} processing={processing[side]} disabled={busy || !!cropDraft || processing.front || processing.back}
-                      onChoose={choosePhoto} onCrop={side => setCropDraft({ side, file: originals[side] })} />)}
+                      photo={photos[side]} screening={photoScreening(photos[side])} processing={processing[side]} disabled={busy || !!cropDraft || processing.front || processing.back}
+                      onChoose={choosePhoto} onCrop={side => {setCropReview(null);setCropDraft({ side, file: originals[side] });}} />)}
                   </div>
                 </section>
                 <p className="text-xs text-slate-500">Your photos are cropped and optimized before upload. Review the final images to ensure all ID details remain readable.</p>
@@ -252,7 +266,7 @@ export default function GuestCheckinPage() {
       </div>
       {cropDraft && <ImageCropDialog key={cropDraft.side} file={cropDraft.file}
         label={details.foreign_guest ? (cropDraft.side === 'front' ? 'Passport front' : 'Visa') : (cropDraft.side === 'front' ? 'ID front side' : 'ID back side')}
-        busy={!!processing[cropDraft.side]} error={error} onApply={applyCrop} onCancel={() => setCropDraft(null)} />}
+        busy={!!processing[cropDraft.side]} error={error} reviewRequired={!!cropReview} reviewPhoto={cropReview?.blob} onCropChange={()=>setCropReview(null)} onManualReview={acceptForReceptionReview} onApply={applyCrop} onCancel={() => {setCropDraft(null);setCropReview(null);}} />}
     </main>
   );
 }

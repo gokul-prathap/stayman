@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cropPixels, compressIdentityImage, TARGET_IMAGE_BYTES } from '../src/features/rooms/utils/identityImage.js';
+import { cropPixels, compressIdentityImage, TARGET_IMAGE_BYTES, rotateIdentityPhoto, normalizeQuarterTurns } from '../src/features/rooms/utils/identityImage.js';
 
 test('maps normalized crop to source pixels and rejects out-of-bounds selections', () => {
   assert.deepEqual(cropPixels(2000, 1000, { x: 0.1, y: 0.2, width: 0.5, height: 0.6 }),
@@ -11,19 +11,20 @@ test('maps normalized crop to source pixels and rejects out-of-bounds selections
 
 async function withBrowserMock(sizes, action) {
   const previousDocument = globalThis.document, previousBitmap = globalThis.createImageBitmap;
-  const calls = [], draws = [], canvases = [];
+  const calls = [], draws = [], canvases = [], rotations = [], translations = [];
   let closed = false;
   globalThis.createImageBitmap = async () => ({ width: 4000, height: 2000, close: () => { closed = true; } });
   globalThis.document = { createElement: () => {
     const canvas = { width: 0, height: 0, getContext: () => ({
       fillRect() {}, drawImage(...args) { draws.push(args.slice(1)); },
+      rotate(angle) { rotations.push(angle); },translate(x,y) { translations.push([x,y]); },
     }), toBlob(callback, type, quality) {
       calls.push(quality);
       callback(new Blob([new Uint8Array(sizes[Math.min(calls.length - 1, sizes.length - 1)])], { type }));
     } };
     canvases.push(canvas); return canvas;
   } };
-  try { await action({ calls, draws, canvases, isClosed: () => closed }); }
+  try { await action({ calls, draws, canvases, rotations, translations, isClosed: () => closed }); }
   finally {
     globalThis.document = previousDocument; globalThis.createImageBitmap = previousBitmap;
   }
@@ -60,4 +61,24 @@ test('keeps a readable-size fallback within bucket limit, rejects results over i
 test('rejects unsupported and oversized files before decoding', async () => {
   await assert.rejects(compressIdentityImage({ type: 'application/pdf', size: 10 }), /JPEG/);
   await assert.rejects(compressIdentityImage({ type: 'image/png', size: 11 * 1024 * 1024 }), /10 MB/);
+});
+test('normalizes left/right rotation and avoids recompressing a full turn',async()=>{
+  assert.equal(normalizeQuarterTurns(-1),3);assert.equal(normalizeQuarterTurns(5),1);
+  assert.throws(()=>normalizeQuarterTurns(.5));
+  assert.equal(await rotateIdentityPhoto(file,4),file);
+});
+test('quarter turns swap output dimensions and preserve rotation in the image pixels',async()=>{
+  await withBrowserMock([1000],async({canvases,rotations,translations,draws,isClosed})=>{
+    const photo=await rotateIdentityPhoto(file,1);
+    assert.equal(photo.type,'image/png');
+    assert.equal(canvases[0].width,1100);assert.equal(canvases[0].height,2200);
+    assert.deepEqual(rotations,[Math.PI/2]);assert.deepEqual(translations,[[550,1100]]);
+    assert.deepEqual(draws,[[-1100,-550,2200,1100]]);assert.equal(isClosed(),true);
+  });
+});
+test('half turns retain the landscape dimensions and rotate from the source',async()=>{
+  await withBrowserMock([1000],async({canvases,rotations})=>{
+    await rotateIdentityPhoto(file,2);
+    assert.equal(canvases[0].width,2200);assert.equal(canvases[0].height,1100);assert.deepEqual(rotations,[Math.PI]);
+  });
 });
