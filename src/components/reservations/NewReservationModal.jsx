@@ -9,9 +9,10 @@ import { nextDay } from '../../features/allocation/utils/allocationMove';
 import { defaultBookingStatus, destinationError } from '../../features/reservations/utils/bookingActions';
 import { useStaff } from '../auth/StaffGate';
 import { nights, dayInZone, rupeesToPaise, money } from '../../features/management/utils/metrics';
-export default function NewReservationModal({ isOpen, onClose, units = [], allocations = [], defaultUnitId, defaultDate, defaultCheckinId, onSaved }) {
+export default function NewReservationModal({ isOpen, onClose, units:initialUnits = [], allocations:initialAllocations = [], defaultUnitId, defaultDate, defaultCheckinId, onSaved }) {
   const { property } = useStaff();
-  const {data,refresh}=usePropertyData();
+  const {data,refresh,refetch,isFetching,error:availabilityError}=usePropertyData();
+  const units=data?.units||initialUnits,allocations=data?.allocations||initialAllocations;
   const walkins=data?.walkins||[];
   const today = dayInZone(new Date(),property.timezone);
   useEffect(()=>{if(isOpen)refresh();},[isOpen]);
@@ -24,7 +25,9 @@ export default function NewReservationModal({ isOpen, onClose, units = [], alloc
   const [error, setError] = useState('');
   useEffect(() => {
     if (!isOpen) return;
-    setForm({ unitId: defaultUnitId || units[0]?.id || '', guestName: '', phone: '', phoneCountry:'IN', webCheckinId:'', email: '', gender: 'OTHER', nationality: 'India',
+    const arrival=defaultDate||today;
+    const availableDefault=units.find(unit=>!destinationError(unit,{gender:'OTHER'},allocations,null,arrival,nextDay(arrival)));
+    setForm({ unitId: defaultUnitId || availableDefault?.id || '', guestName: '', phone: '', phoneCountry:'IN', webCheckinId:'', email: '', gender: 'OTHER', nationality: 'India',
       checkInDate: defaultDate || today, checkOutDate: nextDay(defaultDate || today), status: defaultBookingStatus(defaultDate || today,today), total: '0', paid: '0', source: 'Direct Booking', notes: '' });
     setManualStatus(false); setManualTotal(false); setMaintenance(false); setReason('maintenance'); setError('');
   }, [isOpen, defaultUnitId, defaultDate]);
@@ -39,6 +42,7 @@ export default function NewReservationModal({ isOpen, onClose, units = [], alloc
     }
   }, [manualTotal,form.unitId,form.checkInDate,form.checkOutDate,selectedUnit?.nightlyRatePaise]);
   const change = (key,value) => {
+    setError('');
     if (key === 'status') setManualStatus(true);
     if (key === 'total') setManualTotal(true);
     setForm(previous => ({ ...previous,[key]:value,
@@ -57,7 +61,7 @@ export default function NewReservationModal({ isOpen, onClose, units = [], alloc
   }
   useEffect(()=>{if(isOpen && defaultCheckinId && walkins.some(w=>w.id===defaultCheckinId))selectWalkin(defaultCheckinId);},[isOpen,defaultCheckinId]);
   async function save(event) {
-    event.preventDefault(); setError('');
+    event.preventDefault(); if(busy)return;setError('');
     if (!form.unitId) { setError('Choose a bed or room.'); return; }
     if (!maintenance && (!form.guestName.trim() || form.checkOutDate <= form.checkInDate || Number(form.paid) > Number(form.total))) {
       setError('Check the guest name, departure date and payment amounts.'); return;
@@ -65,17 +69,25 @@ export default function NewReservationModal({ isOpen, onClose, units = [], alloc
     if (!maintenance && form.status==='CHECKED_IN' && (form.checkInDate>today || form.checkOutDate<=today)) {
       setError('Walk-in dates must include today. Choose reserved / awaiting arrival for advance bookings.');return;
     }
-    const unavailable = destinationError(selectedUnit,maintenance ? null : {gender:form.gender},allocations,null,form.checkInDate,maintenance ? nextDay(form.checkInDate) : form.checkOutDate);
-    if (unavailable) { setError(unavailable); return; }
     if(!maintenance && !parsePhoneNumberFromString(form.phone||'')?.isValid()){setError('Enter a valid phone number for the selected country.');return;}
     setBusy(true);
     try {
+      const latest=await refetch();
+      if(latest.error)throw latest.error;
+      if(!latest.data)throw new Error('Could not check current availability. Refresh and try again.');
+      const currentUnit=latest.data.units.find(unit=>unit.id===form.unitId);
+      const unavailable=destinationError(currentUnit,maintenance?null:{gender:form.gender},latest.data.allocations,null,form.checkInDate,maintenance?nextDay(form.checkInDate):form.checkOutDate);
+      if(unavailable)throw new Error(unavailable);
       if (maintenance) await markMaintenance(form.unitId, form.checkInDate, reason.trim());
       else await createBooking(form.unitId, { ...form, guestName: form.guestName.trim(),
         totalAmountPaise: rupeesToPaise(form.total), paidAmountPaise: rupeesToPaise(form.paid) });
       onClose(); await onSaved?.();
-    } catch (err) { setError(databaseError(err)); } finally { setBusy(false); }
+    } catch (err) {
+      if(err.code==='23P01')await refresh();
+      setError(databaseError(err));
+    } finally { setBusy(false); }
   }
+  const selectedAvailability=selectedUnit&&form.checkInDate?destinationError(selectedUnit,maintenance?null:{gender:form.gender},allocations,null,form.checkInDate,maintenance?nextDay(form.checkInDate):form.checkOutDate):'';
   const input = (key, label, type = 'text', extra = {}) => <label className="block text-sm font-medium">{label}<input {...extra} type={type} value={form[key] || ''} onChange={e => change(key, e.target.value)} className="mt-1 min-h-11 w-full rounded-lg border p-2" /></label>;
   return <Modal isOpen={isOpen} onClose={() => { if (!busy) onClose(); }} title={maintenance ? 'Mark bed as maintenance' : 'Create Reservation / Walk-In'}>
     <form onSubmit={save} className="space-y-4"><fieldset disabled={busy} className="space-y-4">
@@ -101,7 +113,7 @@ export default function NewReservationModal({ isOpen, onClose, units = [], alloc
         {input('source', 'Booking source', 'text', { maxLength: 100 })}{input('notes', 'Notes', 'text', { maxLength: 1000 })}
       </>}
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-      <div className="flex justify-end gap-3"><button type="button" onClick={onClose} className="min-h-11 rounded-lg border px-4">Cancel</button><button type="submit" className="min-h-11 rounded-lg bg-brand-600 px-4 text-white">{busy ? 'Saving…' : maintenance ? 'Mark maintenance' : 'Save reservation'}</button></div>
+      {selectedAvailability&&<p role="status" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{selectedAvailability}</p>}{availabilityError&&<p role="alert" className="text-sm text-red-700">Availability could not be refreshed. Please try again.</p>}<div className="flex justify-end gap-3"><button type="button" onClick={onClose} className="min-h-11 rounded-lg border px-4">Cancel</button><button type="submit" disabled={!!selectedAvailability||isFetching||!!availabilityError} className="min-h-11 rounded-lg bg-brand-600 px-4 text-white">{busy ? 'Saving…' : maintenance ? 'Mark maintenance' : 'Save reservation'}</button></div>
     </fieldset></form>
   </Modal>;
 }

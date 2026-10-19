@@ -1,6 +1,11 @@
-import React, { useState } from 'react';
-import { addDays, format, parseISO, startOfDay } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import {useStaff} from '../../../components/auth/StaffGate';
+import StayChart from '../components/StayChart';
+import BlockBedModal from '../components/BlockBedModal';
+import {stayDays} from '../utils/stayView';
+import '../../management/management.css';
+import './stay-view.css';
+import { BedDouble, ChevronLeft, ChevronRight, Plus, RefreshCw, ShieldOff } from 'lucide-react';
 import { moveError, nextDay } from '../utils/allocationMove';
 import { usePropertyData } from '../../reservations/hooks/usePropertyData';
 import { databaseError, transferReservation, releaseMaintenance } from '../../../services/stayman';
@@ -8,13 +13,15 @@ import NewReservationModal from '../../../components/reservations/NewReservation
 import { Drawer } from '../../../components/ui/Drawer';
 import  Modal  from '../../../components/ui/Modal';
 import { transferQuote } from '../../reservations/utils/bookingActions';
-import { money } from '../../management/utils/metrics';
+import { money, dayInZone, shiftDay } from '../../management/utils/metrics';
 import ReservationDetails from '../../reservations/components/ReservationDetails';
 
 export default function AllocationPage() {
-  const [startDate, setStartDate] = useState(startOfDay(new Date()));
+  const {property}=useStaff();
+  const today=dayInZone(new Date(),property.timezone);
+  const [startDate,setStartDate]=useState(today),[dayCount,setDayCount]=useState(7),[blockOpen,setBlockOpen]=useState(false);
   const [selectedStay, setSelectedStay] = useState(null);
-  const { data, isPending, error: loadError, refresh } = usePropertyData();
+  const { data, isPending, error: loadError, refresh } = usePropertyData({refetchInterval:30000});
   const { units = [], allocations = [] } = data || {};
   const activeStay = allocations.find(item => item.id === selectedStay?.id);
   const [moving, setMoving] = useState(false);
@@ -26,6 +33,7 @@ export default function AllocationPage() {
   const [releaseError,setReleaseError]=useState('');
 
   function requestMove(stayId, unitId, day) {
+    if(moving)return;
     const stay = allocations.find(item => item.id === stayId);
     const target = units.find(item => item.id === unitId);
     const error = moveError(stay, target, allocations, units, day);
@@ -50,129 +58,18 @@ export default function AllocationPage() {
   }
   const [createModal, setCreateModal] = useState({ isOpen: false, unitId: null, date: null });
 
-  const days = Array.from({ length: 7 }).map((_, i) => addDays(startDate, i));
-
-  const handlePrev = () => setStartDate(addDays(startDate, -7));
-  const handleNext = () => setStartDate(addDays(startDate, 7));
-
-  const isOccupied = (unitId, date) => {
-    return allocations.find((alloc) => {
-      if (alloc.unitId !== unitId) return false;
-      const checkIn = startOfDay(parseISO(alloc.checkInDate));
-      const checkOut = startOfDay(parseISO(alloc.checkOutDate));
-      const target = startOfDay(date);
-      // Half-open interval [checkIn, checkOut)
-      return target >= checkIn && target < checkOut;
-    });
-  };
-
+  const days=useMemo(()=>stayDays(startDate,dayCount),[startDate,dayCount]);
+  const dateLabel=day=>new Date(day+'T12:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'short',timeZone:'UTC'});
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Bed Allocation Matrix</h1>
-          <p className="text-sm text-slate-500">Drag a reservation to a free bed. Only the dropped night moves; confirm before moving.</p>
-        </div>
-        <div className="flex w-full min-w-0 flex-wrap items-center gap-3 xl:w-auto xl:shrink-0">
-          <div className="flex w-full min-w-0 items-center justify-between bg-white border border-slate-300 rounded-lg overflow-hidden shadow-sm sm:w-auto">
-            <button aria-label="Previous week" onClick={handlePrev} className="shrink-0 p-3 hover:bg-slate-100 text-slate-600">
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <span className="whitespace-nowrap px-1 text-xs sm:px-3 sm:text-sm font-semibold text-slate-800">
-              {format(startDate, 'dd MMM yyyy')} - {format(days[6], 'dd MMM yyyy')}
-            </span>
-            <button aria-label="Next week" onClick={handleNext} className="shrink-0 p-3 hover:bg-slate-100 text-slate-600">
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
-          <button
-            onClick={() => setCreateModal({ isOpen: true, unitId: units[0]?.id, date: format(startDate, 'yyyy-MM-dd') })}
-            disabled={!units.length} className="flex w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap sm:w-auto px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium text-sm shadow-sm"
-          >
-            <Plus className="w-4 h-4" /> New Booking
-          </button>
-        </div>
-      </div>
-
-      {moveMessage && <p role="status" className="rounded-lg bg-slate-100 p-3 text-sm text-slate-700">{moveMessage}</p>}
-      {isPending && <p>Loading allocations…</p>}
-      {loadError && <div role="alert"><p className="text-red-600">{databaseError(loadError)}</p><button onClick={refresh} className="rounded-lg border p-2">Retry</button></div>}
-      {!isPending && !loadError && !units.length && <p>No beds configured. Add units in Supabase or run the sample-data SQL.</p>}
-      {/* Tape Chart Grid */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-x-auto">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="bg-slate-100 border-b border-slate-200">
-              <th className="p-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600 sticky left-0 bg-slate-100 w-48 z-10">
-                Unit / Bed
-              </th>
-              {days.map((day) => (
-                <th key={day.toISOString()} className="p-3 text-center text-xs font-bold uppercase tracking-wider text-slate-600 min-w-[120px]">
-                  {format(day, 'EEE')}<br />
-                  <span className="text-sm font-semibold text-slate-900">{format(day, 'dd MMM')}</span>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {units.map((unit) => (
-              <tr key={unit.id} className="hover:bg-slate-50/50">
-                <td className="p-3 text-sm font-semibold text-slate-800 sticky left-0 bg-white border-r border-slate-200 z-10">
-                  <div className="flex flex-col">
-                    <span>{unit.label}</span>
-                    <span className="text-xs font-normal text-slate-400">{unit.roomName} ({unit.category})</span>
-                  </div>
-                </td>
-                {days.map((day) => {
-                  const alloc = isOccupied(unit.id, day);
-                  if (alloc) {
-                    if (alloc.status === 'MAINTENANCE') {
-                      return (
-                        <td key={day.toISOString()} title={alloc.reason || "maintenance"} className="p-1 border border-dashed border-stone-400 bg-stone-100 text-stone-600 text-center text-xs">
-                          <button type="button" className="w-full rounded border border-dashed border-stone-400 p-2" onClick={()=>{setMaintenance(alloc);setReleaseError('');}}><span className="font-semibold block">Maintenance</span><span className="block max-w-40 truncate">{alloc.reason || "maintenance"}</span><span className="block mt-1 underline">Release bed</span></button>
-                        </td>
-                      );
-                    }
-                    const isCheckedIn = alloc.status === 'CHECKED_IN';
-                    return (
-                      <td
-                        key={day.toISOString()}
-                        draggable
-                        onDragStart={event => { setDragId(alloc.id); event.dataTransfer.setData('text/plain', alloc.id); event.dataTransfer.effectAllowed = 'move'; }}
-                        onDragEnd={() => setDragId(null)}
-                        onClick={() => { if (!dragId) { setSelectedStay(alloc); setSelectedDay(format(day, 'yyyy-MM-dd')); } }}
-                        className={`p-1 border border-slate-200 cursor-pointer transition-all ${
-                          isCheckedIn ? 'bg-emerald-100 border-emerald-300 text-emerald-900' : 'bg-amber-50 border-amber-200 border-dashed text-amber-900'
-                        }`}
-                      >
-                        <div className="p-1 rounded text-left">
-                          <p className="text-xs font-bold truncate">{alloc.guestName}</p>
-                          <p className="text-[10px] opacity-80">{alloc.status}</p>
-                        </div>
-                      </td>
-                    );
-                  }
-                  return (
-                    <td
-                      key={day.toISOString()}
-                      onDragOver={event => {
-                        const stay = allocations.find(item => item.id === dragId);
-                        if (!moveError(stay, unit, allocations, units, format(day, 'yyyy-MM-dd'))) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; }
-                      }}
-                      onDrop={event => { event.preventDefault(); requestMove(event.dataTransfer.getData('text/plain'), unit.id, format(day, 'yyyy-MM-dd')); setDragId(null); }}
-                      onClick={() => setCreateModal({ isOpen: true, unitId: unit.id, date: format(day, 'yyyy-MM-dd') })}
-                      className="p-1 border border-slate-200 hover:bg-slate-100 cursor-pointer text-center text-slate-300 text-xs"
-                    >
-                      +
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
+    <section className="management stay-view">
+      <header className="stay-view-heading"><div className="stay-view-title"><span><BedDouble size={23}/></span><div><h1>Stay View</h1><p>Stays, availability and blocked units · {property.name}</p></div></div></header>
+      <div className="stay-toolbar"><div className="stay-date-nav"><button type="button" aria-label="Previous date range" onClick={()=>setStartDate(shiftDay(startDate,-dayCount))}><ChevronLeft size={16}/></button><button type="button" aria-label="Next date range" onClick={()=>setStartDate(shiftDay(startDate,dayCount))}><ChevronRight size={16}/></button></div><button type="button" onClick={()=>setStartDate(today)}>Today</button><span className="stay-range">{dateLabel(days[0])} – {dateLabel(days[days.length-1])}</span><input className="stay-date-picker" aria-label="Stay view start date" type="date" value={startDate} onChange={event=>{if(event.target.value)setStartDate(event.target.value);}}/><label className="stay-period-label">View<select aria-label="View duration" value={dayCount} onChange={event=>setDayCount(Number(event.target.value))}><option value={7}>1 week</option><option value={14}>2 weeks</option><option value={28}>4 weeks</option></select></label><button type="button" aria-label="Refresh stay view" onClick={refresh}><RefreshCw size={15}/></button><div className="stay-actions"><button type="button" disabled={!units.length||!!loadError} onClick={()=>setBlockOpen(true)}><ShieldOff size={15}/>Block bed</button><button type="button" className="stay-primary" disabled={!units.length||!!loadError} onClick={()=>setCreateModal({isOpen:true,unitId:null,date:startDate})}><Plus size={15}/>New booking</button></div></div>
+      {moveMessage&&<p role="status" className="notice">{moveMessage}</p>}
+      {isPending&&<p role="status">Loading stays...</p>}
+      {loadError&&<div role="alert" className="error">{databaseError(loadError)} <button type="button" onClick={refresh}>Retry</button></div>}
+      {data&&!loadError&&<StayChart data={data} days={days} today={today} onBook={(unitId,date)=>setCreateModal({isOpen:true,unitId,date})} onStay={(stay,day)=>{setSelectedStay(stay);setSelectedDay(day);}} onRelease={allocation=>{setMaintenance(allocation);setReleaseError('');}} onMove={requestMove} moveProblem={(stayId,unitId,day)=>moveError(allocations.find(a=>a.id===stayId),units.find(u=>u.id===unitId),allocations,units,day)} dragId={dragId} onDragChange={setDragId}/>}
+      {data&&!loadError&&!units.length&&<p className="notice">No rooms or beds configured for this property yet.</p>}
+      {blockOpen&&<BlockBedModal units={units} allocations={allocations} start={startDate} onClose={()=>setBlockOpen(false)} onSaved={async()=>{await refresh();setMoveMessage('Bed / room blocked for the selected nights.');}}/>}
       {/* Stay Details Drawer */}
       <Drawer
         isOpen={Boolean(selectedStay)}
@@ -204,13 +101,7 @@ export default function AllocationPage() {
       <NewReservationModal isOpen={createModal.isOpen} units={units} allocations={allocations}
         defaultUnitId={createModal.unitId} defaultDate={createModal.date}
         onClose={() => setCreateModal({ isOpen: false, unitId: null, date: null })} onSaved={refresh} />
-      <footer aria-label="Allocation color legend" className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-600">
-        <span className="font-semibold">Color guide</span>
-        <span className="flex items-center gap-2"><span className="h-4 w-6 rounded border border-emerald-300 bg-emerald-100" />Checked in</span>
-        <span className="flex items-center gap-2"><span className="h-4 w-6 rounded border border-dashed border-amber-300 bg-amber-50" />Pending check-in</span>
-        <span className="flex items-center gap-2"><span className="h-4 w-6 rounded border border-dashed border-stone-400 bg-stone-100" />Maintenance</span>
-        <span className="flex items-center gap-2"><span className="h-4 w-6 rounded border border-slate-200 bg-white" />Available</span>
-      </footer>
-    </div>
+
+    </section>
   );
 }

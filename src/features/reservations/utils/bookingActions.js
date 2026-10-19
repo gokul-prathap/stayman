@@ -4,7 +4,12 @@ export function destinationError(target, guest, allocations, reservationId, from
  if (!target) return 'Choose a bed or room.';
  if (!from || !to || from>=to) return 'Choose valid move dates.';
  if (guest && ((target.genderPolicy==='FEMALE_ONLY' && guest?.gender!=='FEMALE') || (target.genderPolicy==='MALE_ONLY' && guest?.gender!=='MALE'))) return 'Room gender policy does not match.';
- if (allocations.some(a => (!reservationId || a.reservationDbId!==reservationId) && a.unitId===target.id && a.checkInDate<to && a.checkOutDate>from)) return 'Occupied or under maintenance.';
+ const conflict=allocations.find(a => (!reservationId || a.reservationDbId!==reservationId) && a.unitId===target.id && a.checkInDate<to && a.checkOutDate>from);
+ if(conflict){
+  const unit=[target.roomName,target.label].filter(Boolean).join(' / ')||'Selected unit';
+  const reason=conflict.status==='MAINTENANCE'?'Maintenance'+(conflict.reason?' ('+conflict.reason+')':''):'Occupied'+(conflict.guestName?' by '+conflict.guestName:'');
+  return `${unit}: ${reason}, ${conflict.checkInDate} to ${conflict.checkOutDate} (checkout date is free). Choose another unit or dates.`;
+ }
  return '';
 }
 export function chargeBetween(allocation, from, to) {
