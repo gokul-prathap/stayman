@@ -74,9 +74,6 @@
 .bg-amber-50 {
     background-color: var(--theme-surface-6f69f625,rgb(255 251 235 / var(--tw-bg-opacity, 1)))
 }
-.bg-black\/40 {
-    background-color: var(--theme-surface-d2ff29d5,rgb(0 0 0 / 0.4))
-}
 .bg-blue-100 {
     background-color: var(--theme-surface-cd6986c2,rgb(219 234 254 / var(--tw-bg-opacity, 1)))
 }
@@ -142,9 +139,6 @@
 }
 .bg-slate-950\/40 {
     background-color: var(--theme-surface-3cfd43d8,rgb(2 6 23 / 0.4))
-}
-.bg-slate-950\/50 {
-    background-color: var(--theme-surface-511e6ed4,rgb(2 6 23 / 0.5))
 }
 .bg-slate-950\/65 {
     background-color: var(--theme-surface-98d2d376,rgb(2 6 23 / 0.65))
@@ -337,10 +331,4 @@
 }
 .focus\:ring-slate-100:focus {
     --tw-ring-color: var(--theme-border-ba0a471c,rgb(241 245 249 / var(--tw-ring-opacity, 1)))
-}
-.focus-visible\:ring-2:focus-visible {
-    box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 var(--theme-shadow-b16970fc,#0000))
-}
-.focus-visible\:ring-brand-500:focus-visible {
-    --tw-ring-color: var(--theme-border-f8143b0c,rgb(59 130 246 / var(--tw-ring-opacity, 1)))
 }

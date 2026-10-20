@@ -2,7 +2,7 @@ import NightScene from '../../../components/illustrations/NightScene';
 import WebCheckinQueue from '../components/WebCheckinQueue';
 import React,{useState} from 'react';
 import {Link} from 'react-router-dom';
-import {CalendarCheck,CalendarX,BedDouble,Users,ArrowRight,ChevronRight,Plus,Receipt,CalendarDays,ClipboardCheck,RefreshCw} from 'lucide-react';
+import {CalendarCheck,CalendarX,BedDouble,Users,ArrowRight,ChevronRight,Plus,IndianRupee,CalendarDays,ClipboardCheck,RefreshCw} from 'lucide-react';
 import {useOperations,operationsError} from '../../management/hooks/useOperations';
 import {expenseSummary} from '../../management/utils/operations';
 import {usePropertyData} from '../../reservations/hooks/usePropertyData';
@@ -40,7 +40,7 @@ export default function DashboardPage(){
  const schedule=report?[...report.arrivals.map(r=>({r,type:'arrival',time:property.check_in_time||'14:00',room:roomLabel(r)})),...report.departures.map(r=>({r,type:'departure',time:property.check_out_time||'11:00',room:roomLabel(r,true)}))].sort((a,b)=>a.time.localeCompare(b.time)||a.r.booking_ref.localeCompare(b.r.booking_ref)):[];
  const events=schedule.filter(e=>scheduleFilter==='all'||e.type===scheduleFilter);
  const clock=t=>new Date(today+'T'+t.slice(0,5)+':00Z').toLocaleTimeString('en-IN',{timeZone:'UTC',hour:'numeric',minute:'2-digit'});
- const actions=[{label:'New reservation',short:'New booking',icon:CalendarDays,action:()=>setNewBooking(true)},{label:'Add guest (walk-in)',short:'Add guest',icon:Users,action:()=>setNewBooking(true)},{label:'View guests',short:'View guests',icon:Users,path:'/guests'},{label:'Manage rooms',short:'Rooms',icon:BedDouble,path:'/rooms'},{label:'Add expense',short:'Expense',icon:Receipt,path:'/expenses?add=1'}];
+ const actions=[{label:'New reservation',short:'New booking',icon:CalendarDays,action:()=>setNewBooking(true)},{label:'Add guest (walk-in)',short:'Add guest',icon:Users,action:()=>setNewBooking(true)},{label:'View guests',short:'View guests',icon:Users,path:'/guests'},{label:'Manage rooms',short:'Rooms',icon:BedDouble,path:'/rooms'},{label:'Add expense',short:'Expense',icon:IndianRupee,path:'/expenses?add=1'}];
  const activities=data?[...data.reservations.map(r=>({id:r.id,date:r.created_at,title:'Reservation created',detail:data.guests.find(g=>g.id===r.guest_id)?.full_name})),...data.payments.map(p=>({id:p.id,date:p.paid_at,title:p.kind==='REFUND'?'Refund recorded':'Payment recorded',detail:money(p.amount_paise)}))].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,4):[];
  return <section className="management dashboard" aria-label="Dashboard"><header className="dashboard-hero"><NightScene className="dashboard-night-scene" transparentSky/><div><p className="dashboard-date">Today, {dateLabel}</p><h1>{greeting}</h1><p className="subtitle">Here's what's happening at {property.name}.</p></div><div className="dashboard-day-card"><CalendarDays size={32}/><div><strong>{dateLabel.split(',').pop()}</strong><span>{property.name}</span></div><div><span>Check-in {clock(property.check_in_time||'14:00')}</span><span>Check-out {clock(property.check_out_time||'11:00')}</span></div></div></header>
  <PageState pending={isPending} error={error} retry={refresh}/>{data&&!error&&<>

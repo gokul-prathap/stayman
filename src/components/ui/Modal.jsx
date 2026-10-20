@@ -1,11 +1,12 @@
 import React from 'react';
+import {createPortal} from 'react-dom';
 import { X } from 'lucide-react';
 
 export default function Modal({ isOpen, onClose, title, children }) {
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+  return createPortal(
+    <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4">
       <div role="dialog" aria-modal="true" aria-label={title} className="w-full max-w-lg bg-white rounded-xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <h3 className="text-base font-bold text-slate-900">{title}</h3>
@@ -17,6 +18,6 @@ export default function Modal({ isOpen, onClose, title, children }) {
           {children}
         </div>
       </div>
-    </div>
+    </div>,document.body
   );
 }

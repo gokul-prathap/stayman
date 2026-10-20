@@ -32,6 +32,13 @@ body:has(.stayman-topbar) .standalone-theme-toggle{display:none}
 :root[data-theme] #main-sidebar nav a[aria-current=page]{background:linear-gradient(110deg,#26467f,#3265be);color:#fff}
 :root[data-theme] #main-sidebar .sidebar-property-footer{background:linear-gradient(transparent,#14244499)}
 .sidebar-backdrop{background:var(--overlay);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.dialog-backdrop{position:fixed;inset:0;margin:0!important;z-index:100;background:var(--overlay);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+:root[data-theme=light] .management .secondary{background:#eef3fb;border-color:#b9c9e0;color:#294970;font-weight:600}
+:root[data-theme=light] .management .secondary:hover{background:#e1eaff;border-color:#8fa9d3}
+:root[data-theme=dark] .management .secondary{background:var(--raised);border-color:var(--border);color:var(--foreground)}
+.management .reservation-view-action{display:inline-flex;align-items:center;justify-content:center;min-width:100px;white-space:nowrap}
+:root[data-theme] .management .payment-balance-action{background:#e6efff;border-color:#94b0ec;color:#244ba4;font-weight:700}
+:root[data-theme=dark] .management .payment-balance-action{background:#243c69;border-color:#5275af;color:#d7e5ff}
 :root[data-theme=dark] .dashboard-hero{background:linear-gradient(110deg,#172b50,#233e6a);color:#edf4ff}
 :root[data-theme=dark] .dashboard-hero :is(h1,p){color:#e5edff}
 :root[data-theme=dark] .login-scene{color:#fff}

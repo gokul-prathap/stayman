@@ -1,4 +1,5 @@
 import {useState} from 'react';
+import {webCheckinTasks} from '../../reservations/utils/webCheckinTasks';
 
 import {usePropertyData} from '../../reservations/hooks/usePropertyData';
 import {useStaff} from '../../../components/auth/StaffGate';
@@ -11,9 +12,7 @@ export default function WebCheckinQueue({onReview}) {
  const {data,refresh,isFetching,error}=usePropertyData({refetchInterval:30000});
  const [walkinId,setWalkinId]=useState(null),[busy,setBusy]=useState(''),[message,setMessage]=useState(''),[failure,setFailure]=useState('');
  const today=dayInZone(new Date(),property.timezone);
- const walkins=data?.walkins||[];
- const bookings=(data?.reservations||[]).filter(r=>r.status==='PENDING'&&r.check_out_date>today&&(data.members||[]).some(m=>m.reservation_id===r.id&&m.status==='completed'));
- const due=bookings.filter(r=>r.check_in_date<=today),upcoming=bookings.filter(r=>r.check_in_date>today);
+ const {walkins,due,upcoming}=webCheckinTasks(data,today);
  async function checkIn(id) {
   if(busy)return;
   setBusy(id);setFailure('');setMessage('');

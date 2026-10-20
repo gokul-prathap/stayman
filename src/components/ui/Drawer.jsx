@@ -1,11 +1,12 @@
 import React from 'react';
+import {createPortal} from 'react-dom';
 import { X } from 'lucide-react';
 
 export function Drawer({ isOpen, onClose, title, children }) {
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm transition-opacity">
+  return createPortal(
+    <div className="dialog-backdrop fixed inset-0 z-50 flex justify-end transition-opacity">
       <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <h2 className="text-lg font-bold text-slate-900">{title}</h2>
@@ -20,6 +21,6 @@ export function Drawer({ isOpen, onClose, title, children }) {
           {children}
         </div>
       </div>
-    </div>
+    </div>,document.body
   );
 }

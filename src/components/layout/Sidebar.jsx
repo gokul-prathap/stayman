@@ -3,7 +3,7 @@ import React from 'react';
 import { useStaff } from '../auth/StaffGate';
 import { property } from '../../config/property';
 import {propertyLogo} from '../../services/platformAdmin';
-import { PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, X, LogOut } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -14,7 +14,7 @@ import {
   Sparkles, 
   BarChart3, 
   Settings,
-  Tags, Receipt
+  Tags, IndianRupee
 } from 'lucide-react';
 
 const navigation = [
@@ -24,7 +24,7 @@ const navigation = [
   { name: 'Rooms & Beds', href: '/rooms', icon: BedSingle },
   { name: 'Guests', href: '/guests', icon: Users },
   { name: 'Housekeeping', href: '/housekeeping', icon: Sparkles },
-  { name: 'Expenses', href: '/expenses', icon: Receipt },
+  { name: 'Expenses', href: '/expenses', icon: IndianRupee },
   { name: 'Pricing', href: '/pricing', icon: Tags },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
   { name: 'Settings', href: '/settings', icon: Settings },
@@ -72,6 +72,7 @@ export function Sidebar({ expanded, mobile, onToggle, onNavigate }) {
       <div className="sidebar-property-footer relative z-10 shrink-0 p-4 text-xs text-slate-300">
         {(expanded || mobile) && <p className="font-medium text-slate-300">{staff?.property?.name || property.name}</p>}
         {(expanded || mobile) && <p className="truncate text-slate-300">{property.description}</p>}
+        {staff&&(expanded||mobile)&&<div className="sidebar-mobile-account md:hidden">{staff.properties.length>1&&<select aria-label="Switch property" value={staff.property.id} onChange={event=>staff.setPropertyId(event.target.value)}>{staff.properties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>}<button type="button" onClick={staff.signOut}><LogOut size={17}/>Sign out</button></div>}
       </div>
     </aside>
   );
