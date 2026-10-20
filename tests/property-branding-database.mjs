@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {PGlite} from '@electric-sql/pglite';
+import {randomUUID} from 'node:crypto';
+const db=new PGlite(),admin=randomUUID(),owner=randomUUID(),first=randomUUID(),second=randomUUID(),invite=randomUUID(),token='synthetic-branding-token';
+try{
+ await db.exec(`create role anon;create role authenticated;create schema auth;
+ create table auth.users(id uuid primary key,email text,is_anonymous boolean default false);
+ create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.user',true),'')::uuid$$;
+ create function public.stayman_is_platform_admin() returns boolean language sql stable as $$select auth.uid()='${admin}'::uuid$$;
+ create table public.stayman_properties(id uuid primary key,name text,address text,phone text,timezone text,instagram_url text default 'https://www.instagram.com/legacy/',whatsapp_number text default '+919999999999',facebook_url text default '',logo_path text,check_in_time time default '14:00',check_out_time time default '11:00');
+ create table public.stayman_staff(property_id uuid,user_id uuid,role text,primary key(property_id,user_id));
+ create table public.guest_checkin_invitations(id uuid,property_id uuid,token_hash text);
+ create table public.stayman_booking_members(invitation_id uuid,property_id uuid);
+ grant usage on schema auth to authenticated;`);
+ await db.query('insert into auth.users(id,email) values($1,$2)',[owner,'owner@example.test']);
+ const original=await readFile(new URL('../supabase/migrations/202610180014_platform_admin.sql',import.meta.url),'utf8');
+ await db.exec(original.slice(original.indexOf('create function public.stayman_admin_save_property('),original.indexOf('\ninsert into storage.buckets')));
+ const migration=await readFile(new URL('../supabase/migrations/202610210023_property_branding.sql',import.meta.url),'utf8');await db.exec(migration);await db.exec(migration);
+ const session=async id=>{await db.exec('reset role');await db.query("select set_config('request.user',$1,false)",[id]);await db.exec('set role authenticated');};
+ const save=(id,extra={})=>db.query('select public.stayman_admin_save_property($1,$2,$3)',[id,{name:'Garden Homestay',address:'Kochi',phone:'12345',timezone:'Asia/Kolkata',...extra},'owner@example.test']);
+ await session(owner);await assert.rejects(save(first),/administrator/);
+ await session(admin);await save(first,{tagline:'Quiet stays',instagram_url:'https://www.instagram.com/garden_stays/',whatsapp_number:'+91 98765 43210',check_in_time:'13:30'});await save(second,{name:'Hill Hostel'});
+ const profile=async(id=null,t=null)=>(await db.query('select public.guest_property_profile($1,$2) result',[id,t])).rows[0].result;
+ let row=await profile(first);assert.equal(row.tagline,'Quiet stays');assert.equal(row.whatsapp_number,'+919876543210');assert.equal(row.instagram_url,'https://www.instagram.com/garden_stays/');
+ row=await profile(second);assert.equal(row.instagram_url,'');assert.equal(row.whatsapp_number,'');assert.equal(row.tagline,'');assert.equal(await profile(),null);
+ await save(first,{name:'Garden renamed'});assert.equal((await profile(first)).tagline,'Quiet stays');
+ await save(first,{instagram_url:'',whatsapp_number:'',tagline:''});assert.equal((await profile(first)).instagram_url,'');
+ await assert.rejects(save(first,{instagram_url:'javascript:alert(1)'}),/Instagram/);await assert.rejects(save(first,{facebook_url:'https://evil.test/'}),/Facebook/);await assert.rejects(save(first,{whatsapp_number:'invalid'}),/WhatsApp/);await assert.rejects(save(first,{check_in_time:'29:00'}),/valid check/);
+ await assert.rejects(db.query('select public.stayman_admin_save_property_core($1,$2,$3)',[first,{},null]),/permission denied/);
+ await db.exec('reset role');await db.query("insert into public.guest_checkin_invitations values($1,null,encode(sha256(convert_to($2,'UTF8')),'hex'))",[invite,token]);await db.query('insert into public.stayman_booking_members values($1,$2)',[invite,second]);await db.exec('set role anon');
+ assert.equal((await profile(first,token)).name,'Hill Hostel');assert.equal(await profile(first,'invalid-token'),null);
+ assert.equal('owner_email' in (await profile(second)),false);
+ console.log('PASS branding migration: safe reruns, admin-only changes, optional contacts, no new-property defaults, validated URLs, omitted-field preservation and token-scoped public profile');
+}finally{await db.close();}

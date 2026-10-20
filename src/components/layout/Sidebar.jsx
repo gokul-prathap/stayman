@@ -2,7 +2,7 @@ import NightScene from '../illustrations/NightScene';
 import React from 'react';
 import { useStaff } from '../auth/StaffGate';
 import { property } from '../../config/property';
-import {propertyLogo} from '../../services/platformAdmin';
+import PropertyLogo from '../ui/PropertyLogo';
 import { PanelLeftClose, PanelLeftOpen, X, LogOut } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { 
@@ -39,8 +39,8 @@ export function Sidebar({ expanded, mobile, onToggle, onNavigate }) {
       {(expanded||mobile)&&<div className="sidebar-night-scene" aria-hidden="true"><NightScene transparentSky/></div>}
       <div className="relative z-10 flex h-20 shrink-0 items-center justify-between gap-2 px-3">
         {(expanded || mobile) ? <div className="flex min-w-0 items-center gap-2">
-          <img src={propertyLogo(staff?.property?.logo_path) || property.logo} alt={staff?.property?.name || property.name} className="h-11 w-11 shrink-0 rounded-lg object-contain" />
-          <div className="min-w-0"><p className="text-base font-bold text-white">{property.appName}</p><p className="truncate text-xs text-slate-300">{staff?.property?.name || property.name}</p></div>
+          <PropertyLogo property={staff?.property} className="h-11 w-11 shrink-0 rounded-lg"/>
+          <div className="min-w-0"><p className="text-base font-bold text-white">{staff?.property?.name || 'Property'}</p><p className="truncate text-xs text-slate-300">{staff?.property?.tagline || property.appName}</p></div>
         </div> : null}
         <button type="button" onClick={onToggle} aria-label={expanded ? 'Collapse navigation' : 'Expand navigation'}
           aria-expanded={expanded} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-300 hover:bg-[#243b58]">
@@ -70,8 +70,8 @@ export function Sidebar({ expanded, mobile, onToggle, onNavigate }) {
         ))}
       </nav>
       <div className="sidebar-property-footer relative z-10 shrink-0 p-4 text-xs text-slate-300">
-        {(expanded || mobile) && <p className="font-medium text-slate-300">{staff?.property?.name || property.name}</p>}
-        {(expanded || mobile) && <p className="truncate text-slate-300">{property.description}</p>}
+        {(expanded || mobile) && <p className="font-medium text-slate-300">{staff?.property?.name || 'Property'}</p>}
+        {(expanded || mobile) && <p className="truncate text-slate-300">{staff?.property?.tagline}</p>}
         {staff&&(expanded||mobile)&&<div className="sidebar-mobile-account md:hidden">{staff.properties.length>1&&<select aria-label="Switch property" value={staff.property.id} onChange={event=>staff.setPropertyId(event.target.value)}>{staff.properties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>}<button type="button" onClick={staff.signOut}><LogOut size={17}/>Sign out</button></div>}
       </div>
     </aside>

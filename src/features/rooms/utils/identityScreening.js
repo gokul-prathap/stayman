@@ -3,6 +3,7 @@
 export function documentTextResult(text,{side='front',foreign=false,confidence=100}={}) {
  const value=String(text||'').toUpperCase().replace(/[^A-Z0-9<\n /:.-]/g,' ');
  const letters=(value.match(/[A-Z]/g)||[]).length;
+ if(/INCOME TAX DEPARTMENT|PERMANENT ACCOUNT NUMBER|\bPAN CARD\b/.test(value))return {accepted:false,reason:'pan-not-accepted'};
  if(confidence<30||letters<18)return {accepted:false,reason:'unreadable'};
  const aadhaar=/AADHAAR|AADHAR|UIDAI|UNIQUE IDENTIFICATION/.test(value);
  const passport=/PASSPORT|P<[A-Z]{3}/.test(value);
@@ -24,6 +25,7 @@ export function photoScreening(blob){return blob?screened.get(blob)?.result:null
 export function requestManualDocumentReview(blob,options) {
  const entry=screened.get(blob);
  if(!entry||entry.key!==screeningKey(options)||entry.result.accepted)throw new Error('Check the cropped photo before requesting reception review.');
+ if(entry.result.reason==='pan-not-accepted')throw new Error('PAN cards are not accepted. Upload another identity document.');
  entry.result={...entry.result,manualReview:true};
  return entry.result;
 }

@@ -60,3 +60,12 @@ with Python/Pillow and runs the actual OCR engine. It checks that a document-lik
 sample passes and a receipt fails; it downloads the English model on first run.
 Real-world OCR accuracy, camera rotation, glare, browser asset downloads and mobile
 performance still need validation with representative sample documents before deployment.
+# Accepted ID types and optional driving-licence back
+
+Apply `supabase/migrations/202610210022_identity_document_policy.sql` after migration 021. This updates the existing protected completion function while preserving invitation ownership, expiry, booking-date and guest-detail checks.
+
+Web check-in now offers Aadhaar, driving licence, voter ID and passport. A driving licence requires the front photo; its back photo is optional. Other domestic IDs retain both-side uploads. Foreign guests still require passport and visa. Changing the selected ID type clears the current photos so documents from different types are not mixed.
+
+PAN is not accepted as an ID choice. Declared PAN types are rejected by server validation. Recognisable PAN text is blocked by on-device screening and cannot use the manual-review fallback. OCR remains a screening aid, so reception must inspect original documents when a photo is unreadable or uncertain.
+
+Only required or explicitly supplied sides are uploaded, and completion records the canonical `document_type` and `document_sides`. Staff views show the submitted sides rather than an empty back-image slot for a front-only licence. Existing submissions are not deleted or rewritten.

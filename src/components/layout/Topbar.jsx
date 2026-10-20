@@ -5,6 +5,7 @@ import { Menu, IndianRupee, LogOut } from 'lucide-react';
 import {useState} from 'react';
 import {Link} from 'react-router-dom';
 import QuickExpenseModal from '../../features/management/components/QuickExpenseModal';
+import PropertyLogo from '../ui/PropertyLogo';
 import { property } from '../../config/property';
 
 import './topbar.css';
@@ -21,8 +22,8 @@ export function Topbar({ expanded, onToggle }) {
           className="topbar-control topbar-menu">
           <Menu size={21} />
         </button>
-        <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-900">{staff?.property?.name || property.name}</p>
-          <p className="text-xs text-slate-500">{property.appName} · Property management</p></div>
+        <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-900">{staff?.property?.name || 'Property'}</p>
+          <p className="text-xs text-slate-500">{staff?.property?.tagline || property.appName}</p></div>
       </div>
       <GlobalSearch />
       <div className="topbar-account flex shrink-0 items-center gap-2 sm:gap-4 max-sm:ml-auto">
@@ -32,8 +33,8 @@ export function Topbar({ expanded, onToggle }) {
         {staff && <button onClick={staff.signOut} className="topbar-control topbar-signout"><LogOut size={18}/><span>Sign out</span></button>}
         {staff&&<WebCheckinNotifications key={staff.property.id}/>}
         <div className="topbar-profile">
-          <Link to="/property-profile" aria-label="View property profile" title="Property profile" className="topbar-avatar">PM</Link>
-          <div className="hidden text-xs sm:block"><p className="font-semibold text-slate-800">Property manager</p><p className="text-slate-500">{staff?.property?.name || property.name}</p></div>
+          <Link to="/property-profile" aria-label="View property profile" title="Property profile" className="topbar-avatar"><PropertyLogo property={staff?.property} className="h-full w-full rounded-full"/></Link>
+          <div className="hidden text-xs sm:block"><p className="font-semibold text-slate-800">{staff?.property?.name || 'Property'}</p><p className="text-slate-500">{staff?.property?.tagline || 'Property workspace'}</p></div>
         </div>
       </div>
       {expenseMessage&&<div role="status" className="fixed bottom-20 right-4 z-50 rounded-xl border bg-white p-3 text-sm text-blue-700 shadow-lg"><span>{expenseMessage}</span><button aria-label="Dismiss expense confirmation" className="ml-3" onClick={()=>setExpenseMessage('')}>×</button></div>}

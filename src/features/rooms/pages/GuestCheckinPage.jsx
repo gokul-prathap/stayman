@@ -1,3 +1,5 @@
+import {Instagram} from '../../../components/ui/SocialIcons';
+import {identityTypes,identityPolicy} from '../utils/identityPolicy.js';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { ArrowRight, CheckCircle2, FileCheck2, ShieldCheck, UserRound, CalendarDays, MapPin, MessageCircle } from 'lucide-react';
@@ -8,27 +10,24 @@ import { getCountryCallingCode } from 'libphonenumber-js/max';
 import '../guestCheckin.css';
 import { prepareMobilePhoto } from '../utils/identityImage';
 import {screenIdentityPhoto,photoScreening,requestManualDocumentReview} from '../utils/identityScreening';
-import { property } from '../../../config/property';
-import {propertyLogo} from '../../../services/platformAdmin';
+import PropertyLogo from '../../../components/ui/PropertyLogo';
+import {propertyBranding,instagramHandle} from '../../../services/propertyBranding';
 import DocumentPreview from '../components/DocumentPreview';
 import ImageCropDialog from '../components/ImageCropDialog';
 import PhotoUploadCard from '../components/PhotoUploadCard';
 import { validateGuestDetails, guestFieldErrors, propertyToday } from '../utils/guestCheckinValidation';
 import { loadPublicProperty, client, openInvitation, openPublicCheckin, guestError, compressIdentityImage, submitGuestCheckin } from '../services/guestCheckinService';
 
-function Instagram({size=20}) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>;
-}
 function Facebook({size=20}) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14 21v-8h3l.5-4H14V7c0-1.2.4-2 2-2h2V1.4A24 24 0 0 0 15 1c-3 0-5 1.9-5 5.4V9H7v4h3v8z"/></svg>;
 }
-const initial = { full_name: '', email: '', phone: '', phone_country: 'IN', arrival_date: '', departure_date: '', coming_from: '', going_to: '', foreign_guest: false };
+const initial = { full_name: '', email: '', phone: '', phone_country: 'IN', arrival_date: '', departure_date: '', coming_from: '', going_to: '', foreign_guest: false, document_type:'AADHAAR' };
 
 export default function GuestCheckinPage() {
   const location = useLocation();
   const token = new URLSearchParams(location.hash.slice(1)).get('invite') || new URLSearchParams(location.search).get('invite') || '';
   const propertyId=new URLSearchParams(location.search).get('property')||'';
-  const [profile, setProfile] = useState(property);
+  const [profile, setProfile] = useState(()=>propertyBranding(null));
   const [invitation, setInvitation] = useState(null);
   const [details, setDetails] = useState(initial);
   const [photos, setPhotos] = useState({});
@@ -47,10 +46,10 @@ export default function GuestCheckinPage() {
 
   useEffect(() => {
     let active = true;
-    setProfile(property);
+    setProfile(propertyBranding(null));
     if (clientAvailable()) loadPublicProperty(propertyId, token).then(row => {
-      if (active && row) setProfile({ ...property, ...row });
-    }).catch(() => { /* Keep configured links while migration 011 is being installed. */ });
+      if (active && row) setProfile(propertyBranding(row));
+    }).catch(() => { /* Never fall back to another property's branding or social links. */ });
     return () => { active = false; };
   }, [propertyId, token]);
 
@@ -105,6 +104,7 @@ export default function GuestCheckinPage() {
       const blob = await compressIdentityImage(file, crop);
       const screening=await screenIdentityPhoto(blob,{side,foreign:details.foreign_guest});
       if (versions.current[side] === version) {
+        if(screening.reason==='pan-not-accepted'){setError('PAN cards are not accepted. Please upload Aadhaar, a driving licence, voter ID or passport.');setCropReview(null);return;}
         if(!screening.accepted){setCropReview({side,blob,file,version});return;}
         setPhotos(previous => ({ ...previous, [side]: blob }));
         setOriginals(previous => ({ ...previous, [side]: file }));
@@ -137,8 +137,8 @@ export default function GuestCheckinPage() {
         input?.focus(); input?.scrollIntoView({ block: 'center', behavior: 'smooth' });
       }
       const cleaned = validateGuestDetails(details, invitation?.linked ? invitation.arrival_date : propertyToday());
-      if (cropDraft || processing.front || processing.back || !photos.front || !photos.back) {
-        throw new Error('Please choose both document photos and wait for compression.');
+      if (cropDraft || processing.front || processing.back || identityPolicy(cleaned).required.some(side=>!photos[side])) {
+        throw new Error('Please choose the required document photos and wait for compression.');
       }
       if (!reviewing) {
         setDetails({ ...cleaned, phone_country: details.phone_country }); setConfirmed(false); setReviewing(true);
@@ -162,8 +162,8 @@ export default function GuestCheckinPage() {
     <main className="guest-modern min-h-[100dvh] bg-slate-50 px-3 py-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-12">
       <div className="mx-auto max-w-[1100px]">
         <header className="mb-5 flex items-center justify-between px-1">
-          <div className="flex items-center gap-3"><img src={propertyLogo(profile.logo_path) || property.logo} alt={profile.name} className="h-20 w-20 rounded-2xl object-contain sm:h-24 sm:w-24" />
-            <div><span className="text-lg font-bold tracking-tight text-slate-900">{profile.name}</span><p className="text-xs text-slate-500">{property.description}</p></div></div>
+          <div className="flex items-center gap-3"><PropertyLogo property={profile} className="h-20 w-20 rounded-2xl sm:h-24 sm:w-24"/>
+            <div><span className="text-lg font-bold tracking-tight text-slate-900">{profile.name}</span><p className="text-xs text-slate-500">{profile.tagline}</p></div></div>
           <div className="flex items-center gap-3">{profile.instagram_url && <a href={profile.instagram_url} target="_blank" rel="noopener noreferrer" aria-label="Visit our Instagram" className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 text-slate-700 hover:bg-white"><Instagram size={22}/></a>}<span className="hidden items-center gap-1.5 text-xs font-medium text-slate-500 sm:flex"><ShieldCheck size={15} />Guest check-in</span></div>
         </header>
         <div className="mb-5 rounded-2xl border border-slate-200 bg-white px-5 py-6 sm:px-8">
@@ -189,14 +189,14 @@ export default function GuestCheckinPage() {
             </div> :
             reviewing ? <form onSubmit={submit} noValidate className="space-y-6">
               <h2 className="text-lg font-semibold text-slate-900">Review your check-in</h2>
-              <p className="text-sm text-slate-500">Check your details and make sure both compressed photos are readable before submitting.</p>
+              <p className="text-sm text-slate-500">Check your details and make sure the uploaded photos are readable before submitting.</p>
               <dl className="grid gap-4 rounded-lg bg-slate-50 p-4 sm:grid-cols-2">
                 {[
                   ['Full name', details.full_name], ['Email', details.email],
                   ['Phone number', details.phone], ['Date of arrival', details.arrival_date],
                   ['Departure date', details.departure_date], ['Coming from', details.coming_from],
                   ['Going to', details.going_to],
-                  ['Documents', details.foreign_guest ? 'Passport and visa' : 'ID front and back'],
+                  ['Documents', details.foreign_guest ? 'Passport and visa' : identityPolicy(details).label+(details.document_type==='DRIVING_LICENSE'?' (back optional)':' (front and back)')],
                 ].map(([label, value]) => <div key={label}>
                   <dt className="text-xs text-slate-500">{label}</dt>
                   <dd className="mt-1 break-words text-sm font-medium text-slate-800">{value}</dd>
@@ -204,13 +204,13 @@ export default function GuestCheckinPage() {
               </dl>
               <div className="grid gap-4 sm:grid-cols-2">
                 <DocumentPreview blob={photos.front} label={details.foreign_guest ? 'Passport front' : 'ID front side'} />
-                <DocumentPreview blob={photos.back} label={details.foreign_guest ? 'Visa' : 'ID back side'} />
+                {photos.back&&<DocumentPreview blob={photos.back} label={details.foreign_guest ? 'Visa' : 'ID back side'} />}
               </div>
               {Object.values(photos).some(photo=>photoScreening(photo)?.manualReview)&&<p role="status" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Your documents need reception review. You can submit your details now; please bring the original ID to reception.</p>}
               <label className="flex items-start gap-2 text-sm text-slate-700">
                 <input type="checkbox" required checked={confirmed} disabled={busy} className="mt-0.5 h-5 w-5 shrink-0 accent-slate-900"
                   onChange={event => setConfirmed(event.target.checked)} />
-                I confirm that my details are correct and both document photos are readable.
+                I confirm that my details are correct and the uploaded document photos are readable.
               </label>
               <div className="flex flex-col-reverse gap-3 sm:flex-row">
                 <Button className="min-h-12 rounded-xl sm:flex-1" type="button" variant="secondary" disabled={busy} onClick={() => {
@@ -228,24 +228,25 @@ export default function GuestCheckinPage() {
                       onChange={phone => setDetails(previous => ({ ...previous, phone }))}
                       onCountryChange={(country, national) => {
                         setDetails(previous => ({ ...previous, phone_country: country, phone: '+' + getCountryCallingCode(country) + national }));
-                        setTouched(previous => ({ ...previous, phone: true }));
+                        setTouched(previous => ({ ...previous, phone: false }));
                       }} />
 <Input className="min-h-12 min-w-0 !text-base sm:!text-sm" label="Email" name="email" {...liveProps("email")} type="email" autoComplete="email" required maxLength={254} value={details.email} onChange={update} /></div></section>
 <section className="rounded-2xl border border-slate-200 p-4 sm:p-5"><h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-slate-900"><CalendarDays size={18} />Stay dates</h2><div className="grid gap-4 sm:grid-cols-2"><Input className="min-h-12 min-w-0 !text-base sm:!text-sm" label="Date of arrival" name="arrival_date" {...liveProps("arrival_date")} type="date" readOnly={!!invitation?.linked} min={invitation?.linked?invitation.arrival_date:today} required value={details.arrival_date} onChange={update} />
 <Input className="min-h-12 min-w-0 !text-base sm:!text-sm" label="Departure date" name="departure_date" {...liveProps("departure_date")} type="date" readOnly={!!invitation?.linked} min={details.arrival_date && details.arrival_date > today ? details.arrival_date : today} required value={details.departure_date} onChange={update} /></div></section>
 <section className="rounded-2xl border border-slate-200 p-4 sm:p-5"><h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-slate-900"><MapPin size={18} />Travel information</h2><div className="mb-4 grid gap-4 sm:grid-cols-2"><Input className="min-h-12 min-w-0 !text-base sm:!text-sm" label="Coming from" name="coming_from" {...liveProps("coming_from")} required maxLength={150} value={details.coming_from} onChange={update} /><Input className="min-h-12 min-w-0 !text-base sm:!text-sm" label="Going to" name="going_to" {...liveProps("going_to")} required maxLength={150} value={details.going_to} onChange={update} /></div>
                 <label className="flex min-h-14 items-center gap-3 rounded-xl bg-slate-50 p-4 text-sm text-slate-700"><input className="h-5 w-5 shrink-0 accent-slate-900" type="checkbox" checked={details.foreign_guest} onChange={event => {
-                  setDetails(previous => ({ ...previous, foreign_guest: event.target.checked }));
+                  setDetails(previous => ({ ...previous, foreign_guest: event.target.checked,document_type:event.target.checked?'PASSPORT':'AADHAAR' }));
                   versions.current.front++; versions.current.back++;
                   setPhotos({}); setProcessing({}); setOriginals({}); setCropDraft(null);setCropReview(null);
                 }} />I am a foreign guest (passport and visa required)</label>
                 </section>
                 <section className="rounded-2xl border border-slate-200 p-4 sm:p-5">
                   <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900"><FileCheck2 size={20} />Identity documents</h2>
-                  <p className="mb-4 mt-1 text-sm text-slate-500">Upload your government ID (front and back), or passport and visa for foreign guests. We look for the four corners and straighten the photo. If the automatic text check is uncertain, you can submit it for reception review.</p>
+                  <p className="mb-4 mt-1 text-sm text-slate-500">PAN cards are not accepted. A driving licence needs the front photo only; the back is optional. Other Indian IDs need front and back. Foreign guests need passport and visa. We look for the four corners and straighten the photo. If the automatic text check is uncertain, you can submit it for reception review.</p>
+                  {!details.foreign_guest&&<label className="mb-4 block text-sm font-medium text-slate-700">Identity document type<select name="document_type" className="mt-2 min-h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-slate-900" value={details.document_type} onChange={event=>{setDetails(previous=>({...previous,document_type:event.target.value}));versions.current.front++;versions.current.back++;setPhotos({});setOriginals({});setProcessing({});setCropDraft(null);setCropReview(null);setError('');}}>{identityTypes.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>}
                   <div className="grid gap-4 sm:grid-cols-2">
                     {['front', 'back'].map(side => <PhotoUploadCard key={side} side={side}
-                      label={details.foreign_guest ? (side === 'front' ? 'Passport front' : 'Visa') : (side === 'front' ? 'ID front side' : 'ID back side')}
+                      label={details.foreign_guest ? (side === 'front' ? 'Passport front' : 'Visa') : (side === 'front' ? identityPolicy(details).label+' front' : identityPolicy(details).label+' back'+(details.document_type==='DRIVING_LICENSE'?' (optional)':''))}
                       photo={photos[side]} screening={photoScreening(photos[side])} processing={processing[side]} disabled={busy || !!cropDraft || processing.front || processing.back}
                       onChoose={choosePhoto} onCrop={side => {setCropReview(null);setCropDraft({ side, file: originals[side] });}} />)}
                   </div>
@@ -256,7 +257,7 @@ export default function GuestCheckinPage() {
             </form>}
         </div>
         <footer className="mt-6 flex flex-col items-center gap-4 text-center text-sm text-slate-600">
-          {profile.instagram_url && <div className="flex flex-wrap items-center justify-center gap-2"><span>Follow us on Instagram</span><a href={profile.instagram_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 font-semibold underline underline-offset-4"><Instagram size={20}/>{new URL(profile.instagram_url).pathname.replaceAll('/', '') || 'Instagram'}</a></div>}
+          {profile.instagram_url && <div className="flex flex-wrap items-center justify-center gap-2"><span>Follow us on Instagram</span><a href={profile.instagram_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 font-semibold underline underline-offset-4"><Instagram size={20}/>{instagramHandle(profile.instagram_url)}</a></div>}
           <div className="flex flex-wrap items-center justify-center gap-5">
             {profile.whatsapp_number && <a href={'https://wa.me/' + profile.whatsapp_number.replace(/\D/g, '')} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2"><MessageCircle size={19}/>WhatsApp {profile.whatsapp_number}</a>}
             {profile.facebook_url && <a href={profile.facebook_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2"><Facebook size={19}/>Follow us on Facebook</a>}

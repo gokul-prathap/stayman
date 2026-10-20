@@ -1,5 +1,6 @@
-import { parsePhoneNumberFromString } from 'libphonenumber-js/max';
+import { getCountryCallingCode,parsePhoneNumberFromString } from 'libphonenumber-js/max';
 import isEmail from 'validator/lib/isEmail.js';
+import {identityPolicy} from './identityPolicy.js';
 export function propertyToday(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
   const value = type => parts.find(part => part.type === type).value;
@@ -23,9 +24,11 @@ export function guestFieldErrors(details, today = propertyToday()) {
   if (email.length > 254 || !isEmail(email)) errors.email = 'Enter a valid email, such as name@example.com.';
   const phone = text('phone');
   const parsed = parsePhoneNumberFromString(phone, details.phone_country || 'IN');
-  if (!/^[+]?[0-9() .-]+$/.test(phone) || !parsed?.isValid() || (details.phone_country && parsed.country !== details.phone_country) ||
-      (parsed?.country === 'IN' && !/^[6-9][0-9]{9}$/.test(parsed.nationalNumber))) {
-    errors.phone = 'Enter a valid phone number for the selected country.';
+  if (!/^[+]?[0-9() .-]+$/.test(phone) || !parsed?.isPossible() || (details.phone_country && parsed.countryCallingCode !== getCountryCallingCode(details.phone_country)) ||
+      (parsed?.countryCallingCode === '91' && !/^[6-9][0-9]{9}$/.test(parsed.nationalNumber))) {
+    const country=details.phone_country||'IN';
+    const countryName=new Intl.DisplayNames(['en'],{type:'region'}).of(country);
+    errors.phone = 'Check the phone number length and country code for '+countryName+'.';
   }
   for (const [field, label] of [['coming_from', 'coming from'], ['going_to', 'going to']]) {
     const value = text(field);
@@ -49,6 +52,7 @@ export function validateGuestDetails(details, today = propertyToday()) {
   const errors = guestFieldErrors(cleaned, today);
   if (Object.keys(errors).length) throw new Error(Object.values(errors)[0]);
   if (typeof cleaned.foreign_guest !== 'boolean') throw new Error('Please select your document type.');
+  cleaned.document_type=identityPolicy(cleaned).type;
   const parsed = parsePhoneNumberFromString(cleaned.phone, cleaned.phone_country || 'IN');
   cleaned.phone = parsed.number;
   const at = cleaned.email.lastIndexOf('@');

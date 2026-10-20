@@ -1,3 +1,4 @@
+import {identityUploadSides} from '../utils/identityPolicy.js';
 import { createClient } from '@supabase/supabase-js';
 import { validateGuestDetails } from '../utils/guestCheckinValidation';
 import {screenIdentityPhoto} from '../utils/identityScreening';
@@ -63,21 +64,23 @@ export async function claimInvitation(token) {
 export async function submitGuestCheckin(invitation, details, photos) {
   const cleaned = validateGuestDetails(details, invitation?.linked ? invitation.arrival_date : undefined);
   if (!invitation || invitation.status !== 'draft') throw new Error('This invitation is not open for uploads.');
-  // Validate both slots before any network writes, so a missing/invalid second
-  // photo does not upload the first one unnecessarily.
-  for (const side of ['front', 'back']) {
+  const sides=identityUploadSides(cleaned,photos);
+  // Validate all required and supplied slots before any network writes.
+  for (const side of sides) {
     if (!photos[side] || photos[side].type !== 'image/jpeg' || photos[side].size > 1024 * 1024 || photos[side].size === 0) {
-      throw new Error('Please choose both compressed document photos (maximum 1 MB each).');
+      throw new Error('Please choose the required compressed document photos (maximum 1 MB each).');
     }
   }
+  cleaned.document_sides=sides;
   cleaned.document_screening={};
-  for (const side of ['front', 'back']) {
-    if (!photos[side]) throw new Error('Please choose both document photos.');
+  for (const side of sides) {
+    if (!photos[side]) throw new Error('Please choose the required document photos.');
     const screening=await screenIdentityPhoto(photos[side],{side,foreign:cleaned.foreign_guest});
+    if(screening.reason==='pan-not-accepted')throw new Error('PAN cards are not accepted. Upload another identity document.');
     if(!screening.accepted&&!screening.manualReview)throw new Error('Review the cropped photo or choose reception review before submitting.');
     cleaned.document_screening={...cleaned.document_screening,[side]:screening.manualReview?'manual-review':'document-like'};
   }
-  for (const side of ['front', 'back']) {
+  for (const side of sides) {
     const { error } = await client().storage.from('guest-identities')
       .upload(`${invitation.id}/${side}.jpg`, photos[side], {
         upsert: true, contentType: 'image/jpeg', cacheControl: '0',

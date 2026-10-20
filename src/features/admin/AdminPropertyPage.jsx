@@ -1,3 +1,4 @@
+import {instagramProfile} from '../../services/propertyBranding';
 import {useEffect,useState} from 'react';
 import {Link} from 'react-router-dom';
 import {useQueryClient} from '@tanstack/react-query';
@@ -6,7 +7,7 @@ import RoomInventory from '../rooms/components/RoomInventory';
 import {AdminBillingProfile} from '../billing/AdminBilling';
 
 export default function AdminPropertyPage({property,onSaved}){
- const [form,setForm]=useState(()=>property||{id:crypto.randomUUID(),name:'',address:'',phone:'',timezone:'Asia/Kolkata',owner_email:''});
+ const [form,setForm]=useState(()=>property?{...property,check_in_time:(property.check_in_time||'14:00').slice(0,5),check_out_time:(property.check_out_time||'11:00').slice(0,5)}:{id:crypto.randomUUID(),name:'',address:'',phone:'',timezone:'Asia/Kolkata',owner_email:'',tagline:'',instagram_url:'',whatsapp_number:'',facebook_url:'',check_in_time:'14:00',check_out_time:'11:00'});
  const [saved,setSaved]=useState(property||null),[file,setFile]=useState(null),[preview,setPreview]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
  const client=useQueryClient();
  useEffect(()=>{if(!file){setPreview('');return;}const url=URL.createObjectURL(file);setPreview(url);return()=>URL.revokeObjectURL(url);},[file]);
@@ -14,10 +15,10 @@ export default function AdminPropertyPage({property,onSaved}){
   event.preventDefault();setBusy(true);setError('');setMessage('');
   try{
    if(file&&(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>2097152))throw new Error('Choose a PNG, JPEG or WebP logo up to 2 MB.');
-   await adminRpc('stayman_admin_save_property',{p_id:form.id,p_details:form,p_owner_email:form.owner_email||null});
+   await adminRpc('stayman_admin_save_property',{p_id:form.id,p_details:{...form,instagram_url:instagramProfile(form.instagram_url),check_in_time:(form.check_in_time||'14:00').slice(0,5),check_out_time:(form.check_out_time||'11:00').slice(0,5)},p_owner_email:form.owner_email||null});
    if(file)await uploadPropertyLogo(form.id,file);
    const rows=await onSaved();const current=rows.find(row=>row.id===form.id);
-   setSaved(current);setForm({...current,owner_email:''});setFile(null);
+   setSaved(current);setForm({...current,owner_email:'',check_in_time:(current.check_in_time||'14:00').slice(0,5),check_out_time:(current.check_out_time||'11:00').slice(0,5)});setFile(null);
    await client.invalidateQueries({queryKey:['folio']});
    setMessage('Property and logo saved. Complete the billing settings below before issuing invoices.');
   }catch(err){setError(err.message+' If property creation succeeded before a logo error, retry here to finish setup.');}finally{setBusy(false);}
@@ -25,7 +26,7 @@ export default function AdminPropertyPage({property,onSaved}){
  const field=(key,label,extra={})=><label>{label}<input {...extra} value={form[key]||''} onChange={event=>setForm({...form,[key]:event.target.value})}/></label>;
  const logo=preview||(saved?.logo_path?propertyLogo(saved.logo_path):null);
  return <main className="management admin-workspace p-4 sm:p-8 space-y-5"><header className="flex flex-wrap justify-between gap-3"><div><h1>{saved?'Property setup':'Onboard property'}</h1><p className="subtitle">Property identity, logo, owner access and invoice configuration.</p></div><Link className="secondary" to="/godfather">Back to administration</Link></header>
- <form onSubmit={save} className="card"><fieldset disabled={busy} className="space-y-4"><h2>1. Property details and logo</h2><div className="billing-profile-grid">{field('name','Property name',{required:true,minLength:2,maxLength:100})}{field('phone','Contact phone',{maxLength:25})}{field('address','Property address',{required:true,maxLength:500})}{field('timezone','Timezone',{required:true})}{field('owner_email',saved?'Add owner email (optional)':'Owner account email',{type:'email',required:!saved})}<label>Property logo<input key={saved?.logo_path||'new'} type="file" accept="image/png,image/jpeg,image/webp" onChange={event=>setFile(event.target.files?.[0]||null)}/><small>PNG, JPEG or WebP, up to 2 MB.</small></label></div>
+ <form onSubmit={save} className="card"><fieldset disabled={busy} className="space-y-4"><h2>1. Property details and logo</h2><div className="billing-profile-grid">{field('name','Property name',{required:true,minLength:2,maxLength:100})}{field('tagline','Property tagline / type',{maxLength:120,placeholder:'e.g. Backpackers Hostel'})}{field('phone','Contact phone',{maxLength:25})}{field('address','Property address',{required:true,maxLength:500})}{field('timezone','Timezone',{required:true})}{field('owner_email',saved?'Add owner email (optional)':'Owner account email',{type:'email',required:!saved})}<label>Property logo<input key={saved?.logo_path||'new'} type="file" accept="image/png,image/jpeg,image/webp" onChange={event=>setFile(event.target.files?.[0]||null)}/><small>PNG, JPEG or WebP, up to 2 MB.</small></label></div><h3 className="font-semibold">Social links and guest contact</h3><div className="billing-profile-grid">{field('instagram_url','Instagram handle or profile URL (optional)',{maxLength:2048,placeholder:'@yourproperty'})}{field('whatsapp_number','WhatsApp with country code (optional)',{type:'tel',maxLength:25,placeholder:'+919876543210'})}{field('facebook_url','Facebook page (optional)',{type:'url',maxLength:2048,placeholder:'https://www.facebook.com/yourpage'})}{field('check_in_time','Check-in time',{type:'time',required:true})}{field('check_out_time','Check-out time',{type:'time',required:true})}</div><p className="muted">Leave social fields empty to hide them. The property name, tagline and logo appear throughout the workspace and guest check-in.</p>
  <div className="flex items-center gap-4 rounded-xl border p-4">{logo?<img src={logo} alt="Property logo preview" className="h-20 w-32 object-contain"/>:<span className="muted">No logo uploaded yet</span>}<p className="muted">This logo appears on invoice headers. Issued invoices keep the logo and details approved when they were issued.</p></div>
  <p className="muted">The owner must already have a Supabase account. Each person uses their own login. Property and billing changes remain platform-admin only.</p>
  {error&&<p role="alert" className="error">{error}</p>}{message&&<p role="status" className="notice">{message}</p>}<button className="primary">{busy?'Saving...':saved?'Save property and logo':'Create property and continue'}</button></fieldset></form>

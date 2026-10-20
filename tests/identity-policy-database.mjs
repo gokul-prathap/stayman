@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {PGlite} from '@electric-sql/pglite';
+import {randomUUID} from 'node:crypto';
+const db=new PGlite(),user=randomUUID();
+try{
+ await db.exec(`create role anon;create role authenticated;create schema auth;create schema storage;
+ create function auth.uid() returns uuid language sql stable as $$select '${user}'::uuid$$;
+ create table public.guest_checkin_invitations(id uuid primary key,user_id uuid,email text,status text,expires_at timestamptz,details jsonb,completed_at timestamptz);
+ create table public.stayman_booking_members(invitation_id uuid);
+ create table storage.objects(bucket_id text,name text);`);
+ const migration=await readFile(new URL('../supabase/migrations/202610210022_identity_document_policy.sql',import.meta.url),'utf8');await db.exec(migration);await db.exec(migration);
+ await db.exec(`create function public.complete_guest_checkin(invitation_id uuid,guest_details jsonb) returns jsonb language sql security definer as $$select public.complete_guest_checkin_validated(invitation_id,guest_details)$$;grant execute on function public.complete_guest_checkin(uuid,jsonb) to authenticated;`);
+ const dates=(await db.query("select (now() at time zone 'Asia/Kolkata')::date::text arrive,((now() at time zone 'Asia/Kolkata')::date+1)::text depart")).rows[0];
+ const make=async(back=false)=>{const id=randomUUID();await db.exec('reset role');await db.query("insert into public.guest_checkin_invitations values($1,$2,'guest@example.test','draft',now()+interval '1 day',null,null)",[id,user]);await db.query("insert into storage.objects values('guest-identities',$1)",[id+'/front.jpg']);if(back)await db.query("insert into storage.objects values('guest-identities',$1)",[id+'/back.jpg']);await db.exec('set role authenticated');return id;};
+ const details=(document_type,extra={})=>({full_name:'Sample Guest',email:'guest@example.test',phone:'+919876543210',coming_from:'Kochi',going_to:'Delhi',arrival_date:dates.arrive,departure_date:dates.depart,foreign_guest:false,...(document_type?{document_type}:{}),...extra});
+ const complete=(id,value)=>db.query('select public.complete_guest_checkin($1,$2)',[id,value]);
+ const licence=await make();await complete(licence,details('DRIVING_LICENSE'));
+ await db.exec('reset role');let saved=(await db.query('select details from public.guest_checkin_invitations where id=$1',[licence])).rows[0].details;assert.deepEqual(saved.document_sides,['front']);assert.equal(saved.document_type,'DRIVING_LICENSE');
+ await complete(await make(),details('driving licence'));
+ await assert.rejects(complete(await make(),details('DRIVING_LICENSE',{document_sides:['front','back']})),/back photo or visa/);
+ await complete(await make(true),details('DRIVING_LICENSE',{document_sides:['front','back']}));
+ await assert.rejects(complete(await make(),details('AADHAAR')),/back photo or visa/);
+ await assert.rejects(complete(await make(),details(null)),/back photo or visa/);
+ await complete(await make(true),details('AADHAAR'));
+ for(const kind of ['PAN','PAN_CARD','pancard'])await assert.rejects(complete(await make(true),details(kind)),/PAN cards are not accepted/);
+ await assert.rejects(complete(await make(),details('PASSPORT',{foreign_guest:true})),/back photo or visa/);
+ await complete(await make(true),details('PASSPORT',{foreign_guest:true}));
+ await assert.rejects(complete(await make(true),details('DRIVING_LICENSE',{foreign_guest:true})),/passport and visa/);
+ await assert.rejects(db.query('select public.complete_guest_checkin_validated($1,$2)',[licence,details('DRIVING_LICENSE')]),/permission denied/);
+ console.log('PASS ID policy migration: front-only licence, optional back, PAN rejection, legacy two-photo checks, foreign visa requirement and protected inner RPC');
+}finally{await db.close();}

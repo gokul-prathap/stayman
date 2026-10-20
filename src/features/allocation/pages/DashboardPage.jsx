@@ -1,8 +1,11 @@
+import {Instagram} from '../../../components/ui/SocialIcons';
+import PropertyLogo from '../../../components/ui/PropertyLogo';
+import {propertyBranding,instagramHandle} from '../../../services/propertyBranding';
 import NightScene from '../../../components/illustrations/NightScene';
 import WebCheckinQueue from '../components/WebCheckinQueue';
 import React,{useState} from 'react';
 import {Link} from 'react-router-dom';
-import {CalendarCheck,CalendarX,BedDouble,Users,ArrowRight,ChevronRight,Plus,IndianRupee,CalendarDays,ClipboardCheck,RefreshCw} from 'lucide-react';
+import {CalendarCheck,CalendarX,BedDouble,Users,ArrowRight,ChevronRight,Plus,IndianRupee,CalendarDays,ClipboardCheck,RefreshCw,MessageCircle} from 'lucide-react';
 import {useOperations,operationsError} from '../../management/hooks/useOperations';
 import {expenseSummary} from '../../management/utils/operations';
 import {usePropertyData} from '../../reservations/hooks/usePropertyData';
@@ -18,6 +21,7 @@ import './dashboard.css';
 export default function DashboardPage(){
  const {property}=useStaff(),{data,isPending,error,refresh}=usePropertyData(),operations=useOperations();
  const [scheduleFilter,setScheduleFilter]=useState('all'),[occupancyDays,setOccupancyDays]=useState(7),[revenueDays,setRevenueDays]=useState(7),[selected,setSelected]=useState(null),[newBooking,setNewBooking]=useState(false);
+ const branding=propertyBranding(property);
  const now=new Date(),today=dayInZone(now,property.timezone);
  const hour=Number(new Intl.DateTimeFormat('en-GB',{timeZone:property.timezone,hour:'2-digit',hourCycle:'h23'}).format(now));
  const greeting=hour<12?'Good morning!':hour<17?'Good afternoon!':'Good evening!';
@@ -42,7 +46,7 @@ export default function DashboardPage(){
  const clock=t=>new Date(today+'T'+t.slice(0,5)+':00Z').toLocaleTimeString('en-IN',{timeZone:'UTC',hour:'numeric',minute:'2-digit'});
  const actions=[{label:'New reservation',short:'New booking',icon:CalendarDays,action:()=>setNewBooking(true)},{label:'Add guest (walk-in)',short:'Add guest',icon:Users,action:()=>setNewBooking(true)},{label:'View guests',short:'View guests',icon:Users,path:'/guests'},{label:'Manage rooms',short:'Rooms',icon:BedDouble,path:'/rooms'},{label:'Add expense',short:'Expense',icon:IndianRupee,path:'/expenses?add=1'}];
  const activities=data?[...data.reservations.map(r=>({id:r.id,date:r.created_at,title:'Reservation created',detail:data.guests.find(g=>g.id===r.guest_id)?.full_name})),...data.payments.map(p=>({id:p.id,date:p.paid_at,title:p.kind==='REFUND'?'Refund recorded':'Payment recorded',detail:money(p.amount_paise)}))].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,4):[];
- return <section className="management dashboard" aria-label="Dashboard"><header className="dashboard-hero"><NightScene className="dashboard-night-scene" transparentSky/><div><p className="dashboard-date">Today, {dateLabel}</p><h1>{greeting}</h1><p className="subtitle">Here's what's happening at {property.name}.</p></div><div className="dashboard-day-card"><CalendarDays size={32}/><div><strong>{dateLabel.split(',').pop()}</strong><span>{property.name}</span></div><div><span>Check-in {clock(property.check_in_time||'14:00')}</span><span>Check-out {clock(property.check_out_time||'11:00')}</span></div></div></header>
+ return <section className="management dashboard" aria-label="Dashboard"><header className="dashboard-hero"><NightScene className="dashboard-night-scene" transparentSky/><div><p className="dashboard-date">Today, {dateLabel}</p><h1>{greeting}</h1><p className="subtitle">Here's what's happening at {property.name}.</p>{branding.tagline&&<p className="dashboard-property-tagline">{branding.tagline}</p>}{(branding.instagram_url||branding.whatsapp_number)&&<div className="dashboard-property-links">{branding.instagram_url&&<a href={branding.instagram_url} target="_blank" rel="noopener noreferrer"><Instagram size={14}/>{instagramHandle(branding.instagram_url)}</a>}{branding.whatsapp_number&&<a href={'https://wa.me/'+branding.whatsapp_number.slice(1)} target="_blank" rel="noopener noreferrer"><MessageCircle size={14}/>{branding.whatsapp_number}</a>}</div>}</div><div className="dashboard-day-card">{branding.logo_path?<PropertyLogo property={branding} className="h-12 w-12 rounded-lg shrink-0"/>:<CalendarDays size={32}/>}<div><strong>{dateLabel.split(',').pop()}</strong><span>{property.name}</span></div><div><span>Check-in {clock(property.check_in_time||'14:00')}</span><span>Check-out {clock(property.check_out_time||'11:00')}</span></div></div></header>
  <PageState pending={isPending} error={error} retry={refresh}/>{data&&!error&&<>
  <WebCheckinQueue onReview={setSelected}/>
  <div className="dashboard-stats">{[{title:'Available units',short:'Available',value:Math.max(0,daily.available-daily.occupied),icon:BedDouble,tone:'blue',path:'/allocation'},{title:"Today's arrivals",short:'Arrivals',value:report.arrivals.length,icon:CalendarCheck,tone:'green',filter:'arrival'},{title:"Today's departures",short:'Departures',value:report.departures.length,icon:CalendarX,tone:'purple',filter:'departure'},{title:'In-house guests',short:'In-house',value:people.size,icon:Users,tone:'orange',path:'/guests'}].map(s=>{const content=<><span className="stat-top"><span className={'stat-icon '+s.tone}><s.icon size={21}/></span><ChevronRight size={17}/></span><strong>{s.value}</strong><span className="stat-desktop-label">{s.title}</span><span className="stat-mobile-label">{s.short}</span></>;return s.path?<Link className={'card dashboard-stat '+s.tone} key={s.title} to={s.path}>{content}</Link>:<button className={'card dashboard-stat '+s.tone} key={s.title} onClick={()=>{setScheduleFilter(s.filter);document.getElementById('dashboard-schedule')?.scrollIntoView({behavior:'smooth',block:'start'});}}>{content}</button>;})}</div>

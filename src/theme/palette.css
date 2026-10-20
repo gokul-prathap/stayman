@@ -87,6 +87,7 @@
  --theme-border-f23f126e:#edf2fb;
  --theme-border-f350c8f3:rgb(203 213 225 / var(--tw-border-opacity, 1));
  --theme-border-fa7ff362:#e2eaf5;
+ --theme-shadow-17f07f2d:rgb(127 127 127 / .18);
  --theme-shadow-1807e425:#18335b05;
  --theme-shadow-1a36d7b1:#102955;
  --theme-shadow-373f4dab:#3158a312;
@@ -322,6 +323,7 @@
  --theme-text-4d38ec67:#182749;
  --theme-text-4d69a7c7:hsl(218 18% 42% / 1.000);
  --theme-text-528cef87:white;
+ --theme-text-52dd6552:#d6e5ff;
  --theme-text-5554c4de:rgb(4 120 87 / var(--tw-text-opacity, 1));
  --theme-text-575f040a:#20344e;
  --theme-text-57773dd1:hsl(218 18% 42% / 1.000);
@@ -401,6 +403,7 @@
  --theme-text-c0faf693:rgb(68 64 60 / var(--tw-text-opacity, 1));
  --theme-text-c24e8bec:hsl(218 18% 42% / 1.000);
  --theme-text-c2cdf64f:#29476f;
+ --theme-text-c39ce00c:#e5efff;
  --theme-text-c45d6ee0:#4263a1;
  --theme-text-c4626371:hsl(218 18% 42% / 1.000);
  --theme-text-c82f339b:#f8fbff;
@@ -529,6 +532,7 @@
  --theme-border-f23f126e:hsl(218.6 31.8% 27.5% / 1.000);
  --theme-border-f350c8f3:hsl(212.7 13.4% 31.6% / 1.000);
  --theme-border-fa7ff362:hsl(214.7 24.4% 28.7% / 1.000);
+ --theme-shadow-17f07f2d:rgb(0 0 0 / 0.180);
  --theme-shadow-1807e425:rgb(0 0 0 / 0.120);
  --theme-shadow-1a36d7b1:rgb(0 0 0 / 1.000);
  --theme-shadow-373f4dab:rgb(0 0 0 / 0.120);
@@ -764,6 +768,7 @@
  --theme-text-4d38ec67:hsl(218.0 25.0% 90.0% / 1.000);
  --theme-text-4d69a7c7:hsl(218.0 25.0% 67.0% / 1.000);
  --theme-text-528cef87:white;
+ --theme-text-52dd6552:hsl(218.0 100.0% 84.0% / 1.000);
  --theme-text-5554c4de:hsl(162.9 93.5% 70.0% / 1.000);
  --theme-text-575f040a:hsl(218.0 25.0% 90.0% / 1.000);
  --theme-text-57773dd1:hsl(218.0 25.0% 67.0% / 1.000);
@@ -843,6 +848,7 @@
  --theme-text-c0faf693:hsl(218.0 25.0% 90.0% / 1.000);
  --theme-text-c24e8bec:hsl(218.0 25.0% 77.0% / 1.000);
  --theme-text-c2cdf64f:hsl(218.0 25.0% 90.0% / 1.000);
+ --theme-text-c39ce00c:hsl(216.9 100.0% 84.0% / 1.000);
  --theme-text-c45d6ee0:hsl(218.0 25.0% 77.0% / 1.000);
  --theme-text-c4626371:hsl(218.0 25.0% 67.0% / 1.000);
  --theme-text-c82f339b:hsl(214.3 100.0% 84.0% / 1.000);
@@ -972,6 +978,7 @@
  --theme-border-f23f126e:#edf2fb;
  --theme-border-f350c8f3:rgb(203 213 225 / var(--tw-border-opacity, 1));
  --theme-border-fa7ff362:#e2eaf5;
+ --theme-shadow-17f07f2d:rgb(127 127 127 / .18);
  --theme-shadow-1807e425:#18335b05;
  --theme-shadow-1a36d7b1:#102955;
  --theme-shadow-373f4dab:#3158a312;
@@ -1207,6 +1214,7 @@
  --theme-text-4d38ec67:#182749;
  --theme-text-4d69a7c7:hsl(218 18% 42% / 1.000);
  --theme-text-528cef87:white;
+ --theme-text-52dd6552:#d6e5ff;
  --theme-text-5554c4de:rgb(4 120 87 / var(--tw-text-opacity, 1));
  --theme-text-575f040a:#20344e;
  --theme-text-57773dd1:hsl(218 18% 42% / 1.000);
@@ -1286,6 +1294,7 @@
  --theme-text-c0faf693:rgb(68 64 60 / var(--tw-text-opacity, 1));
  --theme-text-c24e8bec:hsl(218 18% 42% / 1.000);
  --theme-text-c2cdf64f:#29476f;
+ --theme-text-c39ce00c:#e5efff;
  --theme-text-c45d6ee0:#4263a1;
  --theme-text-c4626371:hsl(218 18% 42% / 1.000);
  --theme-text-c82f339b:#f8fbff;

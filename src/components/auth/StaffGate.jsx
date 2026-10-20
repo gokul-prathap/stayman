@@ -33,6 +33,13 @@ export default function StaffGate({ children }) {
     }
     return () => { active = false; };
   }, [session?.access_token]);
+  useEffect(()=>{
+    if(!session||session.user.is_anonymous)return;
+    let active=true;
+    const sync=()=>staffProperties().then(items=>{if(active){setProperties(items);setPropertyId(current=>items.some(p=>p.id===current)?current:items[0]?.id||'');}}).catch(()=>{/* Keep the last loaded profile while offline. */});
+    window.addEventListener('focus',sync);
+    return()=>{active=false;window.removeEventListener('focus',sync);};
+  },[session?.user?.id]);
   async function login(event) {
     event.preventDefault(); setBusy(true); setError('');
     const values = new FormData(event.currentTarget);

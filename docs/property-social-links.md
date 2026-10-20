@@ -1,3 +1,5 @@
+> Current setup: property identity and social contacts are platform-admin only. Apply migration 023 and use `/godfather` ? Property setup / logo. See [property branding](property-branding.md). Legacy property-specific frontend fallbacks have been removed.
+
 # Guest check-in social links
 
 Run supabase/migrations/202610100011_property_social_links.sql in the Supabase SQL Editor after migration 010, then deploy the updated application.
