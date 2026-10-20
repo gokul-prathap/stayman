@@ -1,3 +1,4 @@
+import {ThemeToggle} from '../../theme/ThemeProvider';
 import GlobalSearch from './GlobalSearch';
 import { Bell, Menu, Receipt } from 'lucide-react';
 import {useState} from 'react';
@@ -23,6 +24,7 @@ export function Topbar({ expanded, onToggle }) {
       </div>
       <GlobalSearch />
       <div className="topbar-account flex shrink-0 items-center gap-2 sm:gap-4 max-sm:ml-auto">
+        <ThemeToggle/>
         <button type="button" aria-label="Quick add expense" title="Quick add expense" className="flex h-10 items-center gap-1 rounded-lg border px-2 text-xs text-blue-600" onClick={()=>{setExpenseMessage('');setQuickExpense(true);}}><Receipt size={16}/><span className="hidden sm:inline">Expense</span></button>
         {staff?.properties.length > 1 && <select aria-label="Property" value={staff.property.id} onChange={e => staff.setPropertyId(e.target.value)} className="max-w-32 rounded-lg border p-2">{staff.properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>}
         {staff && <button onClick={staff.signOut} className="rounded-lg border p-2 text-xs">Sign out</button>}

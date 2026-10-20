@@ -14,11 +14,11 @@ function Chart({ days, field, label, bars = false }) {
   const baseline = height - padding - (0-min)/(max-min)*(height-padding*2);
   const points = days.map((d, i) => [padding + i * (width - padding * 2) / Math.max(1, days.length - 1), height - padding - (d[field]-min) / (max-min) * (height - padding * 2)]);
   return <figure className="mt-5"><svg viewBox={'0 0 ' + width + ' ' + height} role="img" aria-label={label} className="w-full max-h-64">
-    {[0, 1, 2, 3].map(i => <line key={i} x1="0" x2={width} y1={padding + i * 40} y2={padding + i * 40} stroke="#edf1f8" />)}
-    {bars ? points.map(([x, y], i) => <rect key={days[i].day} x={x - Math.min(14, 200 / days.length)} y={Math.min(y,baseline)} width={Math.min(28, 400 / days.length)} height={Math.abs(baseline - y)} rx="3" fill="#4b82f7"><title>{days[i].day}: {field === 'earned' || field === 'cash' ? money(days[i][field]) : days[i][field].toFixed(1)}</title></rect>) : <>
-      <polygon points={padding + ',' + (height - padding) + ' ' + points.map(p => p.join(',')).join(' ') + ' ' + (width - padding) + ',' + (height - padding)} fill="#eff4ff" />
-      <polyline points={points.map(p => p.join(',')).join(' ')} fill="none" stroke="#416cf4" strokeWidth="3" />
-      {points.map(([x, y], i) => <circle key={days[i].day} cx={x} cy={y} r={days.length > 40 ? 1 : 4} fill="#416cf4"><title>{days[i].day}: {days[i][field].toFixed(1)}</title></circle>)}
+    {[0, 1, 2, 3].map(i => <line key={i} x1="0" x2={width} y1={padding + i * 40} y2={padding + i * 40} stroke="var(--theme-border-7bec2e51,#edf1f8)" />)}
+    {bars ? points.map(([x, y], i) => <rect key={days[i].day} x={x - Math.min(14, 200 / days.length)} y={Math.min(y,baseline)} width={Math.min(28, 400 / days.length)} height={Math.abs(baseline - y)} rx="3" fill="var(--theme-text-947a5efb,#4b82f7)"><title>{days[i].day}: {field === 'earned' || field === 'cash' ? money(days[i][field]) : days[i][field].toFixed(1)}</title></rect>) : <>
+      <polygon points={padding + ',' + (height - padding) + ' ' + points.map(p => p.join(',')).join(' ') + ' ' + (width - padding) + ',' + (height - padding)} fill="var(--theme-surface-bfa61b71,#eff4ff)" />
+      <polyline points={points.map(p => p.join(',')).join(' ')} fill="none" stroke="var(--theme-border-493bf047,#416cf4)" strokeWidth="3" />
+      {points.map(([x, y], i) => <circle key={days[i].day} cx={x} cy={y} r={days.length > 40 ? 1 : 4} fill="var(--theme-text-493bf047,#416cf4)"><title>{days[i].day}: {days[i][field].toFixed(1)}</title></circle>)}
     </>}
   </svg><figcaption className="mt-2 flex justify-between text-xs text-gray-400"><span>{days[0]?.day}</span><span>{days[Math.floor(days.length / 2)]?.day}</span><span>{days.at(-1)?.day}</span></figcaption></figure>;
 }
@@ -51,7 +51,7 @@ export default function ReportsPage() {
     {report && !error && tab!=='Refunds' && <>
       <div className="grid gap-4 lg:grid-cols-2">
         <article className="card"><h2>{tab === 'Utilization' ? 'Unit Utilization' : 'Occupancy Rate'}</h2><div className="mt-6 flex flex-wrap items-center gap-6">
-          <div className="relative h-32 w-32 shrink-0"><svg viewBox="0 0 120 120" role="img" aria-label={report.occupancy.toFixed(1) + ' percent occupancy'}><circle cx="60" cy="60" r="49" fill="none" stroke="#e8eef7" strokeWidth="9"/><circle cx="60" cy="60" r="49" fill="none" stroke="#4772f4" strokeWidth="9" strokeDasharray={Math.min(100,tab === 'Utilization' ? report.utilization : report.occupancy) * 3.079 + ' 308'} transform="rotate(-90 60 60)" /></svg><span className="absolute inset-0 flex items-center justify-center text-2xl font-bold">{Math.round(tab === 'Utilization' ? report.utilization : report.occupancy)}%</span></div>
+          <div className="relative h-32 w-32 shrink-0"><svg viewBox="0 0 120 120" role="img" aria-label={report.occupancy.toFixed(1) + ' percent occupancy'}><circle cx="60" cy="60" r="49" fill="none" stroke="var(--theme-border-4b9ea855,#e8eef7)" strokeWidth="9"/><circle cx="60" cy="60" r="49" fill="none" stroke="var(--theme-border-e389bd74,#4772f4)" strokeWidth="9" strokeDasharray={Math.min(100,tab === 'Utilization' ? report.utilization : report.occupancy) * 3.079 + ' 308'} transform="rotate(-90 60 60)" /></svg><span className="absolute inset-0 flex items-center justify-center text-2xl font-bold">{Math.round(tab === 'Utilization' ? report.utilization : report.occupancy)}%</span></div>
           <div><p className="text-xl font-bold">{report.occupied} / {report.available}</p><p className="muted mt-1">occupied / available unit nights</p><p className="mt-3 text-xs font-semibold text-emerald-600">{(report.occupancy-previous.occupancy).toFixed(1)} percentage points vs previous period</p></div>
         </div></article>
         <article className="card"><h2>{tab === 'ADR' ? 'Average Daily Rate' : 'Stay Revenue'}</h2><p className="metric mt-5">{money(tab === 'ADR' ? report.adr : report.earned)}</p><p className="muted mt-1">{tab === 'ADR' ? 'Revenue per occupied unit night' : 'Booking value allocated across nights in this period'}</p><Chart days={report.days} field="earned" bars label="Stay revenue by date" /></article>

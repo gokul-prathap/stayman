@@ -103,7 +103,7 @@ export default function BedAllocationMatrix() {
                               className="absolute left-2 top-1 right-3 h-6 border-l-2 rounded px-1 text-xs"
                               style={{
                                 backgroundColor: statusStyles[res.status]?.replace('text-', '') || 'transparent',
-                                borderColor: res.status === 'CHECKED_IN' ? '#059669' : '#d97706',
+                                borderColor: res.status === 'CHECKED_IN' ? 'var(--theme-border-92236475,#059669)' : 'var(--theme-border-09f9f14e,#d97706)',
                               }}
                             >
                               {res.guestName}

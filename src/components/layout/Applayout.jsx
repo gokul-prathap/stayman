@@ -36,7 +36,7 @@ export function AppLayout() {
   return (
     <div className={'flex h-[100dvh] w-full overflow-hidden bg-[#f5f8fd] '+(dashboard?'dashboard-layout':'')}>
       {mobile && expanded && <button type="button" aria-label="Close navigation" onClick={() => changeExpanded(false)}
-        className="fixed inset-0 z-40 bg-slate-950/50" />}
+        className="sidebar-backdrop fixed inset-0 z-40" />}
       <Sidebar expanded={expanded} mobile={mobile} onToggle={() => changeExpanded(!expanded)}
         onNavigate={() => { if (mobile) changeExpanded(false); }} />
       <div className="flex min-w-0 flex-1 flex-col">

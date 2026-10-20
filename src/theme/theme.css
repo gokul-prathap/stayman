@@ -1,0 +1,52 @@
+@import './utilities.css';
+
+:root{--page:#f6f8fc;--panel:#fff;--raised:#f0f4fb;--foreground:#1c2d46;--secondary:#5b6e89;--subtle:#71839d;--border:#dce5f1;--accent:#315fff;--focus:#6c95ff;--overlay:rgb(8 16 31 / .55);--shadow:0 12px 35px rgb(24 45 82 / .09);color-scheme:light}
+:root[data-theme=dark]{--page:#0d1422;--panel:#172131;--raised:#202e43;--foreground:#e5edf8;--secondary:#b0bfd5;--subtle:#98aac5;--border:#33445f;--accent:#87a7ff;--focus:#8baaff;--overlay:rgb(0 5 15 / .75);--shadow:0 12px 35px rgb(0 0 0 / .3);color-scheme:dark}
+:root[data-theme],body,#root{background-color:var(--page);color:var(--foreground)}
+body,#root{min-height:100dvh}
+html{scrollbar-color:var(--border) var(--page)}
+:where(*,::before,::after){border-color:var(--border)}
+::selection{background:var(--raised);color:var(--foreground)}
+::-webkit-scrollbar-thumb{background:var(--border)}
+::-webkit-scrollbar-thumb:hover{background:var(--subtle)}
+input,select,textarea{color-scheme:inherit;accent-color:var(--accent)}
+input::placeholder,textarea::placeholder{color:var(--subtle);opacity:1}
+input[type=file]::file-selector-button{border:1px solid var(--border);background:var(--raised);color:var(--foreground);border-radius:8px;padding:7px 10px;margin-right:10px}
+input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus{-webkit-text-fill-color:var(--foreground);-webkit-box-shadow:0 0 0 1000px var(--panel) inset;caret-color:var(--foreground)}
+select option,select optgroup{background:var(--panel);color:var(--foreground)}
+:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
+.theme-toggle{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-width:42px;min-height:42px;padding:9px 11px;border:1px solid var(--border);border-radius:12px;background:var(--panel);color:var(--foreground);font-size:11px;font-weight:650;white-space:nowrap;cursor:pointer}
+.theme-toggle:hover{background:var(--raised)}
+.theme-toggle svg{color:var(--accent);flex-shrink:0}
+.standalone-theme-toggle{position:fixed;z-index:45;top:16px;right:20px}
+.standalone-theme-toggle .theme-toggle{box-shadow:var(--shadow)}
+body:has(.stayman-topbar) .standalone-theme-toggle{display:none}
+.admin-workspace{padding-top:76px!important}
+.guest-modern{padding-top:70px}
+:root[data-theme=dark] .stayman-topbar{background:var(--panel)}
+/* The sidebar artwork keeps its original colours and opacity in both themes. */
+:root[data-theme] #main-sidebar{background:linear-gradient(155deg,#101d39 0%,#1a3264 45%,#2e58a0 78%,#142444 100%);border-right:1px solid #2e4772}
+:root[data-theme] #main-sidebar .sidebar-night-scene,:root[data-theme] #main-sidebar .sidebar-night-scene .night-scene{opacity:1}
+:root[data-theme] #main-sidebar :is(p,button,nav a){color:#dbeafe}
+:root[data-theme] #main-sidebar nav a:hover{background:#243b58;color:#fff}
+:root[data-theme] #main-sidebar nav a[aria-current=page]{background:linear-gradient(110deg,#26467f,#3265be);color:#fff}
+:root[data-theme] #main-sidebar .sidebar-property-footer{background:linear-gradient(transparent,#14244499)}
+.sidebar-backdrop{background:var(--overlay);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+:root[data-theme=dark] .dashboard-hero{background:linear-gradient(110deg,#172b50,#233e6a);color:#edf4ff}
+:root[data-theme=dark] .dashboard-hero :is(h1,p){color:#e5edff}
+:root[data-theme=dark] .login-scene{color:#fff}
+:root[data-theme=dark] .scene-caption :is(h2,p,span){color:#deedff}
+:root[data-theme=dark] .login-brand{color:#fff}
+:root[data-theme=dark] .management .primary,:root[data-theme=dark] .stay-toolbar button.stay-primary{background:#315fff;border-color:#315fff;color:#fff}
+:root[data-theme=dark] .identity-placeholder>span:last-child{background:var(--panel)}
+@media(max-width:639px){.theme-toggle span{display:none}.standalone-theme-toggle{top:12px;right:12px}.admin-workspace{padding-top:68px!important}}
+@media(max-width:767px){
+ :root[data-theme=light] .dashboard-layout>div>header{background:var(--panel);color:var(--foreground);border-bottom:1px solid var(--border)}
+ :root[data-theme=light] .dashboard-layout>div>header :is(.text-slate-900,.text-slate-600,.text-slate-500){color:var(--secondary)}
+}
+@media(prefers-reduced-motion:reduce){*,::before,::after{scroll-behavior:auto!important}}
+@media print{
+ :root[data-theme]{color-scheme:light;--page:#fff;--panel:#fff;--raised:#f0f4fb;--foreground:#1c2d46;--secondary:#5b6e89;--subtle:#71839d;--border:#dce5f1;--accent:#315fff}
+ html,body,#root{background:#fff!important;color:#1c2d46!important}
+ .theme-toggle,.standalone-theme-toggle{display:none!important}
+}
