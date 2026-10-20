@@ -15,13 +15,19 @@ const ReportsPage = lazy(() => import('../features/management/pages/ReportsPage'
 const ExpensesPage = lazy(() => import('../features/management/pages/ExpensesPage'));
 const PricingPage = lazy(() => import('../features/management/pages/PricingPage'));
 const SettingsPage = lazy(() => import('../features/rooms/pages/SettingsPage'));
+const PasswordSetupPage = lazy(() => import('../components/auth/PasswordSetupPage'));
 const PlatformAdminPage = lazy(() => import('../features/admin/PlatformAdminPage'));
+const InvoicePage = lazy(() => import('../features/billing/InvoicePage'));
+const PropertyProfilePage = lazy(() => import('../features/billing/PropertyProfilePage'));
 
 export function AppRoutes() {
   return (
     <Suspense fallback={<div role="status" className="p-8 text-sm text-slate-500">Loading Stayman…</div>}><Routes>
+      <Route path="/auth/set-password" element={<PasswordSetupPage />} />
+      <Route path="/auth/reset-password" element={<PasswordSetupPage />} />
       <Route path="/guest-check-in" element={<GuestCheckinPage />} />
-      <Route path="/godfather" element={<PlatformAdminPage />} />
+      <Route path="/godfather/*" element={<PlatformAdminPage />} />
+      <Route path="/invoice/:reservationId" element={<InvoicePage />} />
       <Route element={<StaffGate><AppLayout /></StaffGate>}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/allocation" element={<AllocationPage />} />
@@ -33,6 +39,7 @@ export function AppRoutes() {
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/property-profile" element={<PropertyProfilePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes></Suspense>

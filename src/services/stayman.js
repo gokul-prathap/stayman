@@ -31,11 +31,14 @@ export async function loadPropertyData(propertyId) {
     db().rpc('stayman_team',{p_property:propertyId}),
     db().rpc('stayman_member_details',{p_property:propertyId}),
     db().rpc('stayman_walkins',{p_property:propertyId}),
+    allRows('stayman_folio_payments',propertyId).catch(error=>({data:[],error})),
   ]);
-  for (const result of results) if (result.error) throw result.error;
+  for (const result of results.slice(0,9)) if (result.error) throw result.error;
+  if(results[9].error&&!['42P01','PGRST205'].includes(results[9].error.code))throw results[9].error;
   const [unitResult, guestResult, reservationResult, allocationResult] = results;
-  const units = unitResult.data.sort((a,b) => (a.room_name+a.label).localeCompare(b.room_name+b.label)).map(u => ({ id: u.id, label: u.label, roomName: u.room_name,
-    category: u.unit_type === 'BED' ? 'DORMITORY' : 'PRIVATE', type: u.unit_type, genderPolicy: u.gender_policy, nightlyRatePaise: Number(u.nightly_rate_paise || 0) }));
+  const allUnits = unitResult.data.sort((a,b) => (a.room_name+a.label).localeCompare(b.room_name+b.label)).map(u => ({ id: u.id, label: u.label, roomName: u.room_name,
+    archivedAt:u.archived_at||null, category: u.unit_type === 'BED' ? 'DORMITORY' : 'PRIVATE', type: u.unit_type, genderPolicy: u.gender_policy, nightlyRatePaise: Number(u.nightly_rate_paise || 0) }));
+  const units=allUnits.filter(u=>!u.archivedAt);
   const guests = guestResult.data.sort((a,b) => b.created_at.localeCompare(a.created_at));
   const reservations = reservationResult.data.sort((a,b) => b.created_at.localeCompare(a.created_at));
   const allocations = allocationResult.data.map(a => {
@@ -46,7 +49,8 @@ export async function loadPropertyData(propertyId) {
       chargePaise: a.charge_paise == null ? undefined : Number(a.charge_paise), checkInDate: a.check_in_date, checkOutDate: a.check_out_date, status: a.status,
       totalAmount: (r?.total_amount || 0) / 100, paidAmount: (r?.paid_amount || 0) / 100, reason: a.reason };
   });
-  return { units, guests, reservations, allocations, payments: results[4].data.sort((a,b) => b.paid_at.localeCompare(a.paid_at)), isOwner: results[5].data, team: results[6].data, members:results[7].data || [], walkins:results[8].data || [] };
+  const folioPayments=(results[9].data||[]).map(payment=>({...payment,amount_paise:payment.amount,kind:'RECEIPT',folio_receipt:true}));
+  return { units, allUnits, guests, reservations, allocations, payments: [...results[4].data,...folioPayments].sort((a,b) => b.paid_at.localeCompare(a.paid_at)), isOwner: results[5].data, team: results[6].data, members:results[7].data || [], walkins:results[8].data || [] };
 }
 export async function createBooking(unitId, details) {
   const { data, error } = await db().rpc('stayman_create_booking', { p_unit: unitId, p_details: details });

@@ -38,9 +38,12 @@ export function reportMetrics(data, from, to, timezone = 'Asia/Kolkata') {
   if (!from || !to || to < from || nights(from, to) > 365) throw new Error('Choose a date range of up to 366 days.');
   const reservations = data.reservations.filter(r => r.status !== 'CANCELLED');
   const validIds = new Set(reservations.map(r => r.id));
-  const unitIds = new Set(data.units.map(u => u.id));
+  const historicalUnits=data.allUnits||data.units;
+  let capacityNights=0;
   const days = [];
   for (let day = from; day <= to; day = shiftDay(day, 1)) {
+    const unitIds=new Set(historicalUnits.filter(u=>!u.archivedAt||day<dayInZone(u.archivedAt,timezone)).map(u=>u.id));
+    capacityNights+=unitIds.size;
     const occupied = new Set(), blocked = new Set();
     data.allocations.forEach(a => {
       if (!unitIds.has(a.unitId) || day < a.checkInDate || day >= a.checkOutDate) return;
@@ -69,7 +72,7 @@ export function reportMetrics(data, from, to, timezone = 'Asia/Kolkata') {
   const cash = days.reduce((s, d) => s + d.cash, 0);
   const opening = (data.payments || []).filter(p => p.method === 'OPENING' && dayInZone(p.paid_at, timezone) >= from && dayInZone(p.paid_at, timezone) <= to).reduce((s, p) => s + Number(p.amount_paise), 0);
   return { days, occupied, available, earned, cash, opening, occupancy: available ? occupied / available * 100 : 0,
-    adr: occupied ? earned / occupied : 0, utilization: unitIds.size ? occupied / (unitIds.size * days.length) * 100 : 0,
+    adr: occupied ? earned / occupied : 0, utilization: capacityNights ? occupied / capacityNights * 100 : 0,
     arrivals: reservations.filter(r => r.check_in_date >= from && r.check_in_date <= to),
     departures: reservations.filter(r => r.check_out_date >= from && r.check_out_date <= to) };
 }

@@ -10,12 +10,12 @@ the trusted Supabase SQL editor, replacing the email:
 ```sql
 insert into public.stayman_platform_admins(user_id)
 select id from auth.users
-where lower(email)=lower('gokulprathap@rocektmail.com') and not is_anonymous
+where lower(email)=lower('gokulprathap@rocketmail.com') and not is_anonymous
 on conflict do nothing;
 ```
 
 The same bootstrap is available in `supabase/seed/platform_admin.sql`. The email
-is exactly as supplied: `gokulprathap@rocektmail.com`. Confirm the domain spelling
+is exactly as supplied: `gokulprathap@rocketmail.com`. Confirm the domain spelling
 before creating the account or running the bootstrap. No login email is sent by
 these SQL scripts.
 
@@ -51,13 +51,14 @@ administrator RPCs or upload logos. Their property access policies stay unchange
 ## Onboard a property
 
 1. Create the owner's account in Supabase Authentication using its account creation
-   or invitation tools. This web panel assigns existing accounts; it does not send
-   invitations, create passwords or provision authentication users.
+   or invitation tools for initial property ownership. After migration 020 and the
+   invitation function deployment, the panel can invite additional team accounts.
 2. Choose **Add property**. Enter the property details, owner email and optional logo.
 3. Save. Property creation and owner membership are one database transaction.
-4. Use **Assign property access** to add each employee's individual account.
-   The existing Manager role provides operational access; Owner also controls
-   pricing and settings. This release does not add a separate reception permission tier.
+4. Use **Invite your property team** to send each employee a password-setup link.
+   See `docs/staff-invitations-setup.md` for deployment and email configuration.
+   Manager provides operational access. Profile and billing settings remain admin-only.
+   This release does not add a separate reception permission tier.
 5. The owner signs into the regular workspace to configure rooms and pricing.
    The property card links to that property's guest check-in page and reception QR
    remains available in Guests.
@@ -80,6 +81,6 @@ property ID, preserving the property and membership already saved.
 - Upload a logo and confirm it appears on the public check-in page and staff sidebar.
 - Assign a Manager and verify sign-in sees only assigned properties.
 
-Do not put a Supabase service role key in browser environment variables. Bootstrap,
-authentication account provisioning, access removal, property suspension and
-property deletion are not exposed by this panel.
+Do not put a Supabase service role key in browser environment variables. Access removal, property suspension and property deletion are not exposed by this panel.
+New team accounts can be provisioned through the protected invitation function;
+platform-admin bootstrap remains trusted SQL only.

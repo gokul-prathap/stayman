@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {PGlite} from '@electric-sql/pglite';
+const db=new PGlite(),admin='00000000-0000-0000-0000-000000000001',staff='00000000-0000-0000-0000-000000000002',property='00000000-0000-0000-0000-000000000003';
+try{
+ await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;
+ create table auth.users(id uuid primary key,email text,is_anonymous boolean default false);
+ create table public.stayman_properties(id uuid primary key);
+ create table public.stayman_staff(user_id uuid,property_id uuid);
+ create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.user',true),'')::uuid$$;
+ create function public.stayman_is_platform_admin() returns boolean language sql stable as $$select auth.uid()='${admin}'::uuid$$;
+ insert into auth.users(id,email) values('${admin}','admin@example.test'),('${staff}','manager@example.test');
+ insert into public.stayman_properties values('${property}');
+ grant usage on schema auth to authenticated;`);
+ await db.exec(await readFile(new URL('../supabase/migrations/202610200020_staff_invitations.sql',import.meta.url),'utf8'));
+ const session=async user=>{await db.exec('reset role');await db.query("select set_config('request.user',$1,false)",[user]);await db.exec('set role authenticated');};
+ const prepare=(email='manager@example.test',role='MANAGER')=>db.query('select public.stayman_prepare_staff_invitation($1,$2,$3) invitation',[property,email,role]);
+ await session(staff);await assert.rejects(prepare(),/administrator/);
+ await session(admin);await assert.rejects(prepare('bad'),/valid email/);await assert.rejects(prepare('test@example.test','ADMIN'),/Choose Owner/);
+ const result=(await prepare(' Manager@Example.test ')).rows[0].invitation;assert.equal(result.user_id,staff);assert.equal(result.email,'manager@example.test');
+ await assert.rejects(prepare(),/one minute/);
+ await assert.rejects(db.exec("update public.stayman_staff_invitations set status='ACCEPTED'"),/permission denied/);
+ await session(staff);assert.equal((await db.query('select * from public.stayman_staff_invitations')).rows.length,0);
+ await db.query('select public.stayman_accept_staff_invitations()');
+ await db.exec('reset role');assert.equal((await db.query('select status from public.stayman_staff_invitations')).rows[0].status,'SENDING');
+ await db.exec(`insert into public.stayman_staff values('${staff}','${property}');update public.stayman_staff_invitations set user_id='${staff}',status='SENT'`);
+ await session(staff);await db.query('select public.stayman_accept_staff_invitations()');
+ await db.exec('reset role');assert.equal((await db.query('select status from public.stayman_staff_invitations')).rows[0].status,'ACCEPTED');
+ await db.exec("update public.stayman_staff_invitations set sent_at=now()-interval '2 minutes'");
+ await session(admin);await prepare();assert.equal((await db.query('select count(*)::int count from public.stayman_staff_invitations')).rows[0].count,1);
+ console.log('PASS invitation migration, admin authorization, input validation, cooldown, RLS, protected writes, acceptance scope and resend');
+}finally{await db.close();}

@@ -1,0 +1,4 @@
+[functions.invite-staff]
+# The function validates the access token via getUser and checks the database
+# admin policy. Gateway JWT checks do not support newer publishable keys.
+verify_jwt = false
