@@ -2,7 +2,7 @@ import React, {lazy,Suspense} from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AppLayout } from '../components/layout/Applayout';
 const DashboardPage = lazy(() => import('../features/allocation/pages/DashboardPage'));
-const AllocationPage = lazy(() => import('../features/allocation/pages/AllocationPage'));
+const StayViewPage = lazy(() => import('../features/allocation/pages/StayViewPage'));
 const RoomsPage = lazy(() => import('../features/rooms/pages/RoomsPage'));
 const HousekeepingPage = lazy(() => import('../features/rooms/pages/HousekeepingPage'));
 const ReservationsPage = lazy(() => import('../features/reservations/pages/ReservationsPage'));
@@ -30,7 +30,8 @@ export function AppRoutes() {
       <Route path="/invoice/:reservationId" element={<InvoicePage />} />
       <Route element={<StaffGate><AppLayout /></StaffGate>}>
         <Route path="/" element={<DashboardPage />} />
-        <Route path="/allocation" element={<AllocationPage />} />
+        <Route path="/stayview" element={<StayViewPage />} />
+        <Route path="/allocation" element={<Navigate to="/stayview" replace />} />
         <Route path="/reservations" element={<ReservationsPage />} />
         <Route path="/rooms" element={<RoomsPage />} />
         <Route path="/guests" element={<GuestsPage />} />

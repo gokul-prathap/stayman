@@ -19,7 +19,7 @@ import {
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Tape Chart', href: '/allocation', icon: CalendarRange },
+  { name: 'Stay View', href: '/stayview', icon: CalendarRange },
   { name: 'Reservations', href: '/reservations', icon: BookOpenCheck },
   { name: 'Rooms & Beds', href: '/rooms', icon: BedSingle },
   { name: 'Guests', href: '/guests', icon: Users },

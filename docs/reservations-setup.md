@@ -34,7 +34,7 @@ Check that the result contains your email. Zero rows means the user/email or pro
 
 Keep the existing Supabase browser URL and publishable key in .env.local (and Vercel environment settings). No service-role key or database password belongs in the frontend.
 
-Run `npm run dev`, open `/allocation`, and sign in with the manager account. Open `/guests` to see guest records and create a new reservation; `/reservations` shows dates, payments and all bed segments. A new booking appears on all three pages and persists after refresh.
+Run `npm run dev`, open `/stayview`, and sign in with the manager account. Open `/guests` to see guest records and create a new reservation; `/reservations` shows dates, payments and all bed segments. A new booking appears on all three pages and persists after refresh.
 
 Drag one occupied night onto an available compatible bed and confirm. Refresh: only that night should move. Try an overlapping reservation: the database must reject it. Mark an empty day as maintenance: it should remain dashed after refresh. Sign out and verify reservation records are inaccessible without staff membership.
 

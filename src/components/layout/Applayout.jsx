@@ -42,7 +42,7 @@ export function AppLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar expanded={expanded} onToggle={() => changeExpanded(!expanded)} />
         <main className="flex-1 overflow-y-auto p-4 sm:p-6"><Outlet key={currentProperty.id} /></main>
-        <nav className="staff-mobile-nav" aria-label="Mobile navigation"><NavLink end to="/"><LayoutDashboard/>Dashboard</NavLink><NavLink to="/allocation"><CalendarRange/>Tape Chart</NavLink><NavLink to="/reservations"><BookOpenCheck/>Bookings</NavLink><button type="button" onClick={()=>changeExpanded(true)} aria-label="More navigation" aria-controls="main-sidebar" aria-expanded={expanded}><Menu/>More</button></nav>
+        <nav className="staff-mobile-nav" aria-label="Mobile navigation"><NavLink end to="/"><LayoutDashboard/>Dashboard</NavLink><NavLink to="/stayview"><CalendarRange/>Stay View</NavLink><NavLink to="/reservations"><BookOpenCheck/>Bookings</NavLink><button type="button" onClick={()=>changeExpanded(true)} aria-label="More navigation" aria-controls="main-sidebar" aria-expanded={expanded}><Menu/>More</button></nav>
       </div>
     </div>
   );

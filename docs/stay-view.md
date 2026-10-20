@@ -1,6 +1,6 @@
 # Stay View
 
-The `/allocation` tape chart now defaults to 7 nights, with 14- and 28-night
+The `/stayview` stay view now defaults to 7 nights, with 14- and 28-night
 options, previous/next range controls, Today and a date picker. Dates start in
 the property's timezone. The chart uses compact continuous stay bars, sticky
 room labels, date headers and availability/occupancy rows in a bounded scroller.

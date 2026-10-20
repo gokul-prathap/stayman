@@ -16,7 +16,7 @@ import { transferQuote } from '../../reservations/utils/bookingActions';
 import { money, dayInZone, shiftDay } from '../../management/utils/metrics';
 import ReservationDetails from '../../reservations/components/ReservationDetails';
 
-export default function AllocationPage() {
+export default function StayViewPage() {
   const {property}=useStaff();
   const today=dayInZone(new Date(),property.timezone);
   const [startDate,setStartDate]=useState(today),[dayCount,setDayCount]=useState(7),[blockOpen,setBlockOpen]=useState(false);

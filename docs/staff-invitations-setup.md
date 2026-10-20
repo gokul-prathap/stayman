@@ -18,7 +18,7 @@
 
    ```powershell
    supabase functions deploy invite-staff --project-ref YOUR_PROJECT_REF
-   supabase secrets set STAFF_INVITE_ALLOWED_ORIGINS="http://localhost:5173,https://your-app.example" --project-ref YOUR_PROJECT_REF
+   supabase secrets set STAFF_INVITE_ALLOWED_ORIGINS="http://localhost:5173,https://stayman.in" --project-ref YOUR_PROJECT_REF
    ```
 
    Use exact app origins, without paths or trailing slashes. `supabase/config.toml` disables the gateway JWT check for this function to support publishable keys. The function independently validates the user's token with Auth and calls `stayman_is_platform_admin` before using any administrative capability. Keep `SUPABASE_SERVICE_ROLE_KEY` server-side: hosted Edge Functions provide the standard Supabase secrets. Never add this key to a `VITE_` environment variable.
@@ -27,7 +27,7 @@
 
    ```text
    http://localhost:5173/auth/set-password
-   https://your-app.example/auth/set-password
+   https://stayman.in/auth/set-password
    ```
 
    Set the Site URL to the production app URL. A localhost link only works on the machine running the development app; use a deployed URL when inviting managers on another device.
