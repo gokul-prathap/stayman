@@ -1,0 +1,13 @@
+.collapsible-card{position:relative;border:1px solid var(--border,#e0e7f0);border-radius:12px;padding:14px 20px 14px 14px;background:var(--panel,#fff)}
+.collapsible-card-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:28px}
+.collapsible-card-heading>h2{font-size:14px;font-weight:650}
+.collapsible-card-summary{font-size:11px;color:var(--secondary,#65748a)}
+.management .card-edge-toggle{position:absolute;right:-12px;top:14px;display:flex;align-items:center;justify-content:center;width:26px;height:26px;min-height:26px;padding:0;border:1px solid var(--border,#dce6f5);border-radius:50%;background:var(--panel,#fff);color:var(--foreground,#294970);cursor:pointer;z-index:1}
+.card-edge-toggle>svg{flex-shrink:0;transition:transform .2s}
+.card-edge-toggle[aria-expanded=true]>svg{transform:rotate(180deg)}
+.card-edge-toggle:focus-visible{outline:2px solid var(--focus,#4778ef);outline-offset:3px}
+.collapsible-card-content{margin-top:16px}
+.collapsible-card-content[hidden]{display:none!important}
+.billing-folio{position:relative}
+.billing-folio>.billing-collapse-heading{padding-right:14px}
+@media(prefers-reduced-motion:reduce){.card-edge-toggle>svg{transition:none}}
