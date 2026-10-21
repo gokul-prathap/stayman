@@ -1,3 +1,4 @@
+import AppLoader from '../../components/ui/AppLoader';
 import {useEffect,useRef,useState} from 'react';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
 import {Link} from 'react-router-dom';
@@ -29,7 +30,7 @@ export default function BillingFolio({reservationId,admin=false}){
   chargeRequest.current||=crypto.randomUUID();
   await run(async()=>{await adminRpc('stayman_add_folio_charge',{p_reservation:reservationId,p_category:charge.category,p_description:charge.description,p_quantity:Number(charge.quantity),p_amount:amount,p_note:charge.note,p_request:chargeRequest.current});chargeRequest.current=null;setCharge(previous=>({...previous,amount:'',quantity:'1',note:''}));},'Charge added to the draft.');
  }
- if(query.isPending)return <section className="billing-folio"><p className="muted">Loading billing...</p></section>;
+ if(query.isPending)return <section className="billing-folio"><AppLoader label="Loading billing..."/></section>;
  if(query.error)return <section className="billing-folio"><h2>Invoice preparation</h2><p className="muted">Billing is not available yet. Contact the platform administrator.</p><button type="button" className="secondary" onClick={()=>query.refetch()}>Retry</button></section>;
  const draft=folio.status==='DRAFT',registered=folio.settings.registration==='REGISTERED';
  return <section className="billing-folio space-y-4"><div className="flex flex-wrap justify-between gap-2"><div><h2>Invoice preparation <span className="billing-status">{folio.status}</span></h2><p className="muted">Accommodation, amenities and penalties in one booking folio.</p></div><button type="button" className="secondary" onClick={()=>setOpen(value=>!value)}>{open?'Collapse':'Prepare / view invoice'}</button></div>

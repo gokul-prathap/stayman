@@ -93,7 +93,7 @@ export const attachWalkin=(id,invitation,asContact=false)=>mutation('stayman_att
 export const guestCheckinLink=id=>mutation('stayman_guest_checkin_link',{p_guest:id});
 export const bindBookingMember=(guest,member)=>mutation('stayman_bind_member',{p_guest:guest,p_member:member});
 
-export const guestDirectory=(property,search,filter,checkin,page,size)=>mutation('stayman_guest_directory',{p_property:property,p_search:search,p_filter:filter,p_checkin:checkin,p_page:page,p_size:size});
+export const guestDirectory=(property,search,filter,checkin,page,size,dateFrom='',dateTo='',dateField='arrival')=>mutation('stayman_guest_directory',{p_property:property,p_search:search,p_filter:filter,p_checkin:checkin,p_page:page,p_size:size,p_date_from:dateFrom||null,p_date_to:dateTo||null,p_date_field:dateField});
 export const guestProfile=(property,kind,id)=>mutation('stayman_guest_profile',{p_property:property,p_kind:kind,p_id:id});
 export const renameGuest=(property,kind,id,name)=>mutation('stayman_rename_guest',{p_property:property,p_kind:kind,p_id:id,p_name:name});
 export const releaseMaintenance=id=>mutation('stayman_release_maintenance',{p_allocation:id});

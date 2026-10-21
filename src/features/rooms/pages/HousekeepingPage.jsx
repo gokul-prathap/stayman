@@ -1,3 +1,4 @@
+import AppLoader from '../../../components/ui/AppLoader';
 import {useRef,useState} from 'react';
 import {Link} from 'react-router-dom';
 import {useStaff} from '../../../components/auth/StaffGate';
@@ -32,7 +33,7 @@ export default function HousekeepingPage() {
  const totals=Object.fromEntries(['clean','in_use','dirty','laundry'].map(k=>[k,linen.reduce((s,i)=>s+Number(i[k]),0)]));
  const visible=data?.items.filter(i=>i.kind===tab)||[];
  return <section className="management space-y-5"><header className="flex flex-wrap items-start justify-between gap-3"><div><h1>Laundry, Linen & Supplies</h1><p className="subtitle">Track bedsheets, pillowcases, towels and cleaning supplies across your property.</p></div><Link className="secondary" to="/expenses">Record laundry / cleaning expense</Link></header>
- {isPending&&<p role="status">Loading stock...</p>}{error&&<p role="alert" className="error">{operationsError(error)} <button onClick={refresh}>Retry</button></p>}
+ {isPending&&<AppLoader label="Loading stock..."/>}{error&&<p role="alert" className="error">{operationsError(error)} <button onClick={refresh}>Retry</button></p>}
  {saveError&&<p role="alert" className="error">{saveError}</p>}{message&&<p role="status" className="success">{message}</p>}
  {data&&!error&&<><div className="grid grid-cols-2 gap-4 lg:grid-cols-4">{[['clean','Clean / ready'],['in_use','In use'],['dirty','Dirty / awaiting wash'],['laundry','At laundry']].map(([key,title])=><article className="card" key={key}><p className="muted">{title}</p><p className="metric">{totals[key]}</p><p className="muted">Total linen pieces</p></article>)}</div>
  <p className="notice">Add each linen type separately, such as Bedsheets or Towels. Clean stock is available to issue. Record existing stock once, then move pieces between states; transfers do not increase total stock. Linen movements are recorded manually.</p>

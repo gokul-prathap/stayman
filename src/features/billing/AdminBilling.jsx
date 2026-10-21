@@ -1,3 +1,4 @@
+import AppLoader from '../../components/ui/AppLoader';
 import {useEffect,useState} from 'react';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
 import {adminRpc} from '../../services/platformAdmin';
@@ -14,7 +15,7 @@ export function AdminBillingProfile({property}){
   try{await adminRpc('stayman_save_billing_profile',{p_property:property.id,p_settings:form});await client.invalidateQueries({queryKey:['billing-profile',property.id]});await client.invalidateQueries({queryKey:['folio']});setMessage('Billing configuration saved. Issued invoices remain unchanged.');}
   catch(err){setError(err.message);}finally{setBusy(false);}
  }
- if(query.isPending)return <p role="status">Loading billing configuration...</p>;
+ if(query.isPending)return <AppLoader label="Loading billing configuration..."/>;
  if(query.error)return <p className="error">Billing configuration is unavailable. Apply the billing migration before using this section.</p>;
  if(!form)return null;
  const field=(key,label,extra={})=><label>{label}<input {...extra} value={form[key]||''} onChange={event=>setForm({...form,[key]:event.target.value})}/></label>;
@@ -25,5 +26,5 @@ export function AdminBillingProfile({property}){
 
 export default function AdminBillingQueue(){
  const query=useQuery({queryKey:['admin-folios'],queryFn:()=>adminRpc('stayman_admin_folio_queue'),refetchInterval:30000}),[selected,setSelected]=useState(null);
- return <section className="card space-y-4"><div className="flex flex-wrap justify-between gap-2"><div><h2>Invoice approval</h2><p className="muted">Staff prepare drafts. Only you can approve and issue.</p></div><button className="secondary" onClick={()=>query.refetch()}>Refresh</button></div>{query.isPending?<p>Loading drafts...</p>:query.error?<p className="muted">Invoice approval will be available after billing setup.</p>:<div className="overflow-x-auto"><table><thead><tr><th>Property / booking</th><th>Guest</th><th>Status</th><th/></tr></thead><tbody>{query.data.map(row=><tr key={row.id}><td>{row.property_name}<small className="block muted">{row.reference}</small></td><td>{row.guest}</td><td>{row.invoice_number||'Awaiting approval'}</td><td><button className="secondary" onClick={()=>setSelected(selected===row.reservation_id?null:row.reservation_id)}>Review</button></td></tr>)}{!query.data.length&&<tr><td colSpan={4}>No submitted invoices yet.</td></tr>}</tbody></table></div>}{selected&&<BillingFolio key={selected} reservationId={selected} admin/>}</section>;
+ return <section className="card space-y-4"><div className="flex flex-wrap justify-between gap-2"><div><h2>Invoice approval</h2><p className="muted">Staff prepare drafts. Only you can approve and issue.</p></div><button className="secondary" onClick={()=>query.refetch()}>Refresh</button></div>{query.isPending?<AppLoader label="Loading drafts..."/>:query.error?<p className="muted">Invoice approval will be available after billing setup.</p>:<div className="overflow-x-auto"><table><thead><tr><th>Property / booking</th><th>Guest</th><th>Status</th><th/></tr></thead><tbody>{query.data.map(row=><tr key={row.id}><td>{row.property_name}<small className="block muted">{row.reference}</small></td><td>{row.guest}</td><td>{row.invoice_number||'Awaiting approval'}</td><td><button className="secondary" onClick={()=>setSelected(selected===row.reservation_id?null:row.reservation_id)}>Review</button></td></tr>)}{!query.data.length&&<tr><td colSpan={4}>No submitted invoices yet.</td></tr>}</tbody></table></div>}{selected&&<BillingFolio key={selected} reservationId={selected} admin/>}</section>;
 }

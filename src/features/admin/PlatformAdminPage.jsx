@@ -1,3 +1,4 @@
+import AppLoader from '../../components/ui/AppLoader';
 import {useEffect,useState} from 'react';
 import {Link,useLocation,useNavigate} from 'react-router-dom';
 import AdminPropertyPage from './AdminPropertyPage';
@@ -30,7 +31,7 @@ export default function PlatformAdminPage() {
   return()=>{active=false;};
  },[session?.access_token]);
  async function reload(){const rows=await adminRpc('stayman_admin_properties');setProperties(rows);return rows;}
- if(session===undefined||(hasOtpSession(session)&&allowed===null))return <p role="status" className="p-8">Loading administrator access...</p>;
+ if(session===undefined||(hasOtpSession(session)&&allowed===null))return <AppLoader label="Loading administrator access..."/>;
  if(!hasOtpSession(session))return <AdminOtpLogin/>;
  if(!allowed)return <main className="management p-8 space-y-4"><h1>Platform administrator access required</h1><p>{error||'This account can only access its assigned properties.'}</p><Link className="secondary inline-block" to="/">Property workspace</Link><button className="secondary" onClick={()=>supabase.auth.signOut()}>Sign out</button></main>;
  const setup=location.pathname.match(/^\/godfather\/properties\/(new|[a-f0-9-]+)\/?$/i);

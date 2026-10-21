@@ -1,0 +1,48 @@
+.dashboard-hero>.greeting-scene{position:absolute;inset:0;display:block;width:100%;height:100%;pointer-events:none;z-index:0}
+.dashboard-hero::after{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:linear-gradient(90deg,#e6f5ffed, #e6f5ff55 40%,transparent 65%);transition:background 2.8s}
+:root[data-theme=dark] .dashboard-hero::after{background:linear-gradient(90deg,#111b38dd,#111b3833 45%,transparent 70%)}
+.dashboard-hero>div{position:relative;z-index:1}
+:root[data-theme=light] .dashboard .dashboard-hero :is(h1,p,a){color:#193c59;text-shadow:none}
+.greeting-scene .greeting-night-sky{opacity:0;transition:opacity 2.8s ease}
+.greeting-scene[data-sky=night] .greeting-night-sky{opacity:1}
+.greeting-dusk{opacity:0;transition:opacity 2.8s ease}.greeting-scene[data-sky=sunset] .greeting-dusk{opacity:1}
+.greeting-stars,.greeting-moon,.greeting-sun,.greeting-clouds{transition:opacity 2.8s ease,transform 2.8s ease}
+.greeting-stars{opacity:0;transform:translateX(-35px)}
+.greeting-scene[data-sky=night] .greeting-stars{opacity:1;transform:translateX(0)}
+.greeting-stars circle{animation:greeting-twinkle 4s ease-in-out infinite alternate}
+.greeting-moon{opacity:0;transform:translate(100px,160px)}
+.greeting-scene[data-sky=night] .greeting-moon{opacity:1;transform:translate(0,0)}
+.greeting-sun{opacity:1;transform:translate(0,0)}
+.greeting-scene[data-sky=night] .greeting-sun{opacity:0;transform:translate(-130px,170px)}
+.greeting-clouds{opacity:1;transform:translateX(0)}
+.greeting-scene[data-sky=night] .greeting-clouds{opacity:0;transform:translateX(100px)}
+.greeting-cloud-drift{animation:greeting-cloud-drift 28s ease-in-out infinite alternate}
+.greeting-far,.greeting-near,.greeting-cottage,.greeting-front{transition:fill 2.8s ease,transform 2.8s ease}
+.greeting-far{fill:#8bbaca}.greeting-near{fill:#6da7a2}.greeting-front{fill:#4f8a81}
+.greeting-scene[data-sky=night] .greeting-far{fill:#293d6b;transform:translateX(-12px)}
+.greeting-scene[data-sky=night] .greeting-near{fill:#245187;transform:translateX(-28px)}
+.greeting-scene[data-sky=night] .greeting-front{fill:#193652;transform:translateX(-50px)}
+.greeting-scene[data-sky=night] .greeting-cottage{transform:translateX(-38px)}
+.greeting-house{fill:#e5c19d;transition:fill 2.8s}.greeting-roof{fill:#b96c57;transition:fill 2.8s}
+.greeting-scene[data-sky=night] .greeting-house{fill:#426281}.greeting-scene[data-sky=night] .greeting-roof{fill:#2e4264}
+@keyframes greeting-dusk{0%,100%{opacity:0}40%,60%{opacity:.95}}
+@keyframes greeting-twinkle{from{opacity:.3}to{opacity:1}}
+@keyframes greeting-cloud-drift{from{transform:translateX(-20px)}to{transform:translateX(45px)}}
+@media(max-width:767px){.dashboard-hero>.greeting-scene{width:100%;height:100%}}
+@media(prefers-reduced-motion:reduce){.greeting-scene *{animation:none!important;transition:none!important}}
+
+.dashboard .dashboard-hero[data-period=day]::after{background:linear-gradient(90deg,#e6f5ffdd,#e6f5ff33 45%,transparent 70%)}
+.dashboard .dashboard-hero[data-period=sunset]::after{background:linear-gradient(90deg,#382049bb,#38204922 50%,transparent 75%)}
+.dashboard .dashboard-hero[data-period=night]::after{background:linear-gradient(90deg,#050916dd,#05091644 50%,transparent 75%)}
+:root[data-theme] .dashboard .dashboard-hero[data-period=day] :is(h1,p,a){color:#193c59;text-shadow:none}
+:root[data-theme] .dashboard .dashboard-hero:is([data-period=night],[data-period=sunset]) :is(h1,p,a){color:#edf4ff;text-shadow:0 1px 8px #10132599}
+.greeting-scene[data-sky=sunset] .greeting-sun{transform:translate(-70px,125px)}
+.greeting-scene[data-sky=sunset] .greeting-stars{opacity:.45;transform:translateX(-15px)}
+.greeting-scene[data-sky=sunset] .greeting-clouds{opacity:.35;transform:translateX(50px)}
+.greeting-scene[data-sky=sunset] .greeting-far{fill:#85678c;transform:translateX(-6px)}
+.greeting-scene[data-sky=sunset] .greeting-near{fill:#655074;transform:translateX(-14px)}
+.greeting-scene[data-sky=sunset] .greeting-front{fill:#40394f;transform:translateX(-25px)}
+.greeting-scene[data-sky=sunset] .greeting-cottage{transform:translateX(-19px)}
+
+.greeting-transition-sky{animation:greeting-dusk 2.8s ease both}
+@media(prefers-reduced-motion:reduce){.greeting-transition-sky{display:none}}

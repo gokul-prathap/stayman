@@ -1,3 +1,4 @@
+import AppLoader from '../components/ui/AppLoader';
 import React, {lazy,Suspense} from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AppLayout } from '../components/layout/Applayout';
@@ -22,7 +23,7 @@ const PropertyProfilePage = lazy(() => import('../features/billing/PropertyProfi
 
 export function AppRoutes() {
   return (
-    <Suspense fallback={<div role="status" className="p-8 text-sm text-slate-500">Loading Stayman…</div>}><Routes>
+    <Suspense fallback={<AppLoader fullPage/>}><Routes>
       <Route path="/auth/set-password" element={<PasswordSetupPage />} />
       <Route path="/auth/reset-password" element={<PasswordSetupPage />} />
       <Route path="/guest-check-in" element={<GuestCheckinPage />} />

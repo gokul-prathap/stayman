@@ -16,3 +16,4 @@ export function ThemeToggle(){
  const {theme,toggleTheme}=useContext(ThemeContext),dark=theme==='dark',label=dark?'Switch to light theme':'Switch to dark theme';
  return <button type="button" className="theme-toggle" onClick={toggleTheme} aria-label={label} title={label} aria-pressed={dark}>{dark?<Sun size={18} aria-hidden="true"/>:<Moon size={18} aria-hidden="true"/>}<span>{dark?'Light':'Dark'}</span></button>;
 }
+export function useTheme(){return useContext(ThemeContext);}

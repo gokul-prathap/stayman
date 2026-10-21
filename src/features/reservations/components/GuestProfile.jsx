@@ -1,3 +1,4 @@
+import AppLoader from '../../../components/ui/AppLoader';
 import ReservationDetails from './ReservationDetails';
 import React,{useState} from 'react';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
@@ -32,7 +33,7 @@ export default function GuestProfile({guestId,memberId,walkinId,onAllocate}) {
  async function create(){if(busy)return;if(!activeBooking){setError('');setLink(window.location.origin+'/guest-check-in?property='+property.id);return;}setBusy(true);setError('');setLink('');try{const existing=member||relevantLinked.find(m=>m.status!=='completed');const result=existing?{token:await reissueBookingMember(existing.id)}:await guestCheckinLink(guest.id);if(result.token)setLink(window.location.origin+'/guest-check-in#invite='+result.token);await refresh();}catch(e){setError(databaseError(e));}finally{setBusy(false);}}
  async function bind(){setBusy(true);setError('');try{await bindBookingMember(guest.id,bindId);await refresh();}catch(e){setError(databaseError(e));}finally{setBusy(false);}}
  async function saveName(event){event.preventDefault();setBusy(true);setError('');try{await renameGuest(property.id,kind,id,newName.trim());setEditing(false);await refresh();}catch(e){setError(databaseError(e));}finally{setBusy(false);}}
- if(query.isPending)return <p role="status">Loading guest details...</p>;
+ if(query.isPending)return <AppLoader label="Loading guest details..."/>;
  if(query.error)return <p role="alert" className="error">{databaseError(query.error)} <button onClick={()=>query.refetch()}>Retry</button></p>;
  if(!guest&&!member&&!walkin)return <p className="notice">Guest was linked or updated. Refresh the guest list.</p>;
  return <section className="management space-y-4"><header><div className="flex flex-wrap items-center justify-between gap-2"><h2>{name}</h2><button className="secondary" onClick={()=>{setNewName(name);setEditing(true);}}>Edit name</button></div><p className="muted mt-2">{phone} {details?.email||guest?.email||''}</p></header> {editing&&<form onSubmit={saveName} className="card space-y-3"><label>Guest name<input required minLength={2} maxLength={100} value={newName} onChange={e=>setNewName(e.target.value)}/></label><p className="muted">Updates the staff display name. Original submitted identity details remain preserved.</p><div className="flex gap-2"><button className="primary" disabled={busy}>Save name</button><button type="button" className="secondary" onClick={()=>setEditing(false)}>Cancel</button></div></form>}<GuestSubmission submission={submission}/>

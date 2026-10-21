@@ -1,3 +1,4 @@
+import AppLoader from '../../components/ui/AppLoader';
 import {useEffect,useRef} from 'react';
 import {useParams,Link} from 'react-router-dom';
 import {useQuery} from '@tanstack/react-query';
@@ -8,7 +9,7 @@ export default function InvoicePage(){
  const {reservationId}=useParams(),query=useQuery({queryKey:['folio',reservationId],queryFn:()=>adminRpc('stayman_folio_preview',{p_reservation:reservationId}),retry:false});
  const printed=useRef(false);
  useEffect(()=>{if(!query.data||printed.current||new URLSearchParams(window.location.search).get('print')!=='1')return;printed.current=true;let cancelled=false;const ready=async()=>{await document.fonts.ready;await Promise.all(Array.from(document.images).map(img=>img.decode?.().catch(()=>{})));if(!cancelled)window.print();};const timer=setTimeout(ready,100);return()=>{cancelled=true;clearTimeout(timer);printed.current=false;};},[query.data]);
- if(query.isPending)return <p role="status" className="p-8">Loading invoice...</p>;
+ if(query.isPending)return <AppLoader label="Loading invoice..."/>;
  if(query.error)return <main className="p-8"><h1>Invoice unavailable</h1><p>Sign in with an account assigned to this property, or use platform administrator login.</p><Link to="/">Staff login</Link> · <Link to="/godfather">Platform admin login</Link></main>;
  const f=query.data,issued=f.status==='ISSUED',registered=f.settings.registration==='REGISTERED';
  return <main className="invoice-page"><nav className="invoice-controls"><button onClick={()=>window.print()}>{issued?'Print / save PDF':'Print draft / save PDF'}</button><span>{issued?'Issued document':'DRAFT — not a tax invoice'}</span></nav><article className="invoice-paper"><header className="invoice-brand">{f.property.logo_path&&<img src={propertyLogo(f.property.logo_path)} alt={f.property.name+' logo'}/>}<div><h1>{f.property.name}</h1><strong>{f.settings.legal_name||f.property.name}</strong><p>{f.settings.billing_address||f.property.address}</p><p>{f.property.phone} {f.settings.email&&' · '+f.settings.email}</p>{registered&&<p>GSTIN: {f.settings.gstin}</p>}</div></header>
