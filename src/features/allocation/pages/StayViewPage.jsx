@@ -1,3 +1,5 @@
+import ExtendStay from '../../reservations/components/ExtendStay';
+import {extensionPlan} from '../utils/stayExtension';
 import AppLoader from '../../../components/ui/AppLoader';
 import React, { useMemo, useState } from 'react';
 import {useStaff} from '../../../components/auth/StaffGate';
@@ -25,6 +27,9 @@ export default function StayViewPage() {
   const { data, isPending, error: loadError, refresh } = usePropertyData({refetchInterval:30000});
   const { units = [], allocations = [] } = data || {};
   const activeStay = allocations.find(item => item.id === selectedStay?.id);
+  const [maintenanceExtension,setMaintenanceExtension]=useState(null);
+  const [extension,setExtension]=useState(null);
+  function requestExtension(allocation,departure){try{const plan=extensionPlan(data,allocation,departure,today);if(plan.maintenance)setMaintenanceExtension(plan);else setExtension(plan);setMoveMessage('');}catch(error){setMoveMessage(error.message);}}
   const [moving, setMoving] = useState(false);
   const [selectedDay, setSelectedDay] = useState('');
   const [dragId, setDragId] = useState(null);
@@ -68,9 +73,11 @@ export default function StayViewPage() {
       {moveMessage&&<p role="status" className="notice">{moveMessage}</p>}
       {isPending&&<AppLoader label="Loading stays..."/>}
       {loadError&&<div role="alert" className="error">{databaseError(loadError)} <button type="button" onClick={refresh}>Retry</button></div>}
-      {data&&!loadError&&<StayChart data={data} days={days} today={today} onBook={(unitId,date)=>setCreateModal({isOpen:true,unitId,date})} onStay={(stay,day)=>{setSelectedStay(stay);setSelectedDay(day);}} onRelease={allocation=>{setMaintenance(allocation);setReleaseError('');}} onMove={requestMove} moveProblem={(stayId,unitId,day)=>moveError(allocations.find(a=>a.id===stayId),units.find(u=>u.id===unitId),allocations,units,day)} dragId={dragId} onDragChange={setDragId}/>}
+      {data&&!loadError&&<StayChart onExtend={requestExtension} data={data} days={days} today={today} onBook={(unitId,date)=>setCreateModal({isOpen:true,unitId,date})} onStay={(stay,day)=>{setSelectedStay(stay);setSelectedDay(day);}} onRelease={allocation=>{setMaintenance(allocation);setReleaseError('');}} onMove={requestMove} moveProblem={(stayId,unitId,day)=>moveError(allocations.find(a=>a.id===stayId),units.find(u=>u.id===unitId),allocations,units,day)} dragId={dragId} onDragChange={setDragId}/>}
       {data&&!loadError&&!units.length&&<p className="notice">No rooms or beds configured for this property yet.</p>}
       {blockOpen&&<BlockBedModal units={units} allocations={allocations} start={startDate} onClose={()=>setBlockOpen(false)} onSaved={async()=>{await refresh();setMoveMessage('Bed / room blocked for the selected nights.');}}/>}
+      {maintenanceExtension&&<BlockBedModal units={units} allocations={allocations} start={maintenanceExtension.allocation.checkInDate} allocation={maintenanceExtension.allocation} initialTo={maintenanceExtension.departure} onClose={()=>setMaintenanceExtension(null)} onSaved={async()=>{await refresh();setMoveMessage('Maintenance extended.');}}/>}
+      <Modal isOpen={!!extension} onClose={()=>setExtension(null)} title="Confirm stay extension">{extension&&<ExtendStay key={extension.reservation.id+extension.departure} reservation={extension.reservation} guest={extension.guest} units={units} allocations={allocations} initialDeparture={extension.departure} initialUnitId={extension.unit.id} onSaved={async()=>{await refresh();setMoveMessage('Stay extended. Added nights and charges saved.');}} onClose={()=>setExtension(null)}/>}</Modal>
       {/* Stay Details Drawer */}
       <Drawer
         isOpen={Boolean(selectedStay)}

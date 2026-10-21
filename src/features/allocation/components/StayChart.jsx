@@ -1,11 +1,39 @@
-import {useMemo,useState} from 'react';
-import {BedDouble,ChevronDown,ChevronRight,ChevronsDownUp,ChevronsUpDown,Search} from 'lucide-react';
+import {draggedDeparture,extensionPlan} from '../utils/stayExtension';
+import {shiftDay} from '../../management/utils/metrics';
+import {useMemo,useRef,useState} from 'react';
+import {ArrowLeftRight,BedDouble,ChevronDown,ChevronRight,ChevronsDownUp,ChevronsUpDown,Search} from 'lucide-react';
 import {roomGroups} from '../../management/utils/metrics';
 import {buildStayIndex,stayDaySummary,staySnapshot,staySegments,visibleStayGroups,stayStatus} from '../utils/stayView';
 
 const dateLabel=(day,options)=>new Intl.DateTimeFormat('en-GB',{timeZone:'UTC',...options}).format(new Date(day+'T12:00:00Z'));
-export default function StayChart({data,days,today,onBook,onStay,onRelease,onMove,moveProblem,dragId,onDragChange}){
+export default function StayChart({data,days,today,onBook,onStay,onRelease,onMove,moveProblem,dragId,onDragChange,onExtend}){
  const [inventory,setInventory]=useState('all'),[search,setSearch]=useState(''),[expanded,setExpanded]=useState(()=>new Set(roomGroups(data.units).map(group=>group.key))),[conflict,setConflict]=useState(null);
+ const resizing=useRef(null),suppressResizeClick=useRef(false);
+ const [resizePreview,setResizePreview]=useState(null);
+ function startResize(event,allocation,span){
+  if(event.button!==0)return;
+  event.preventDefault();event.stopPropagation();
+  const cell=event.currentTarget.closest('td'),scroll=cell.closest('.stay-scroll');
+  suppressResizeClick.current=false;
+  resizing.current={allocation,startX:event.clientX,width:cell.getBoundingClientRect().width/span,scroll,scrollStart:scroll.scrollLeft,departure:allocation.checkOutDate};
+  event.currentTarget.setPointerCapture(event.pointerId);
+ }
+ function moveResize(event){
+  const drag=resizing.current;if(!drag)return;
+  const bounds=drag.scroll.getBoundingClientRect();
+  if(event.clientX>bounds.right-35)drag.scroll.scrollLeft+=18;
+  else if(event.clientX<bounds.left+160)drag.scroll.scrollLeft-=18;
+  drag.departure=draggedDeparture(drag.allocation.checkOutDate,event.clientX-drag.startX+drag.scroll.scrollLeft-drag.scrollStart,drag.width);
+  let problem='';if(drag.departure>drag.allocation.checkOutDate){try{extensionPlan(data,drag.allocation,drag.departure,today);}catch(error){problem=error.message;}}
+  setResizePreview({id:drag.allocation.id,departure:drag.departure,problem,pixels:Math.max(0,Math.round((Date.parse(drag.departure)-Date.parse(drag.allocation.checkOutDate))/86400000)*drag.width)});
+ }
+ function finishResize(event,cancel=false){
+  const drag=resizing.current;if(!drag)return;
+  resizing.current=null;setResizePreview(null);
+  if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);
+  suppressResizeClick.current=cancel||drag.departure!==drag.allocation.checkOutDate;
+  if(!cancel&&drag.departure>drag.allocation.checkOutDate)onExtend(drag.allocation,drag.departure);
+ }
  const {units,allocations,reservations}=data;
  const {index,bookingMap}=useMemo(()=>buildStayIndex(units,allocations,reservations,days),[units,allocations,reservations,days]);
  const groups=useMemo(()=>visibleStayGroups(units,allocations,days,{inventory,search}),[units,allocations,bookingMap,days,inventory,search]);
@@ -23,7 +51,9 @@ export default function StayChart({data,days,today,onBook,onStay,onRelease,onMov
    if(entries.length>1)return <td key={day} className="stay-conflict"><button type="button" onClick={()=>setConflict({unit,entries,day})} title="Conflicting allocations — review before changing">{entries.length} conflicts</button></td>;
    const allocation=entries[0],status=stayStatus(allocation,bookingMap,today),maintenance=status==='blocked';
    const label=status==='held'?'Held · allocation needs review':maintenance?'Blocked · '+(allocation.reason||'Maintenance'):allocation.guestName||'Guest';
-   return <td key={day} colSpan={segment.span} className="stay-segment"><button type="button" className={'stay-pill '+status} title={`${label} · ${allocation.checkInDate} to ${allocation.checkOutDate} · ${status.replace('-',' ')}`} draggable={!maintenance&&status!=="held"} onDragStart={event=>{onDragChange(allocation.id);event.dataTransfer.setData('text/plain',allocation.id);event.dataTransfer.effectAllowed='move';}} onDragEnd={()=>onDragChange(null)} onClick={event=>status==="held"?setConflict({unit,entries,day:dayAt(event,segment),held:true}):maintenance?onRelease(allocation):onStay(allocation,dayAt(event,segment))}><i aria-hidden="true"/><span>{label}</span></button></td>;
+   const reservation=bookingMap.get(allocation.reservationDbId);
+   const extendable=onExtend&&status!=='held'&&(maintenance||(['PENDING','CHECKED_IN'].includes(reservation?.status)&&allocation.checkOutDate===reservation.check_out_date))&&allocation.checkOutDate>=today&&allocation.checkOutDate===shiftDay(days[segment.start+segment.span-1],1);
+   return <td key={day} colSpan={segment.span} className="stay-segment"><div className={'stay-booking-bar'+(extendable?' can-extend':'')}><button type="button" className={'stay-pill '+status} title={`${label} · ${allocation.checkInDate} to ${allocation.checkOutDate} · ${status.replace('-',' ')}`} draggable={!maintenance&&status!=="held"} onDragStart={event=>{onDragChange(allocation.id);event.dataTransfer.setData('text/plain',allocation.id);event.dataTransfer.effectAllowed='move';}} onDragEnd={()=>onDragChange(null)} onClick={event=>status==="held"?setConflict({unit,entries,day:dayAt(event,segment),held:true}):maintenance?onRelease(allocation):onStay(allocation,dayAt(event,segment))}><i aria-hidden="true"/><span>{label}</span></button>{extendable&&<button type="button" className="stay-extend-handle" aria-label={(maintenance?'Extend maintenance for ':'Extend stay for ')+label} title={maintenance?'Drag right to extend maintenance':'Drag right to extend checkout, or click to choose dates'} draggable={false} onDragStart={event=>event.preventDefault()} onPointerDown={event=>startResize(event,allocation,segment.span)} onPointerMove={moveResize} onPointerUp={event=>finishResize(event)} onPointerCancel={event=>finishResize(event,true)} onLostPointerCapture={event=>finishResize(event,true)} onClick={event=>{event.stopPropagation();if(!suppressResizeClick.current)onExtend(allocation,shiftDay(allocation.checkOutDate,1));suppressResizeClick.current=false;}} onKeyDown={event=>{if(event.key==='Escape')finishResize(event,true);}}><ArrowLeftRight size={16} aria-hidden="true"/></button>}{resizePreview?.id===allocation.id&&resizePreview.pixels>0&&<span className={'stay-extension-preview'+(resizePreview.problem?' is-invalid':'')} style={{width:resizePreview.pixels}}>{resizePreview.departure}</span>}</div></td>;
   })}</tr>;
  }
  return <><section className="stay-summary" aria-label={'Inventory snapshot for '+days[0]}>{[['Total units',snapshot.total,'total'],['Vacant',snapshot.vacant,'vacant'],['Occupied',snapshot.occupied,'occupied'],['Reserved',snapshot.reserved,'reserved'],['Blocked',snapshot.blocked,'blocked'],['Due out',snapshot.dueOut,'due-out']].map(([label,value,tone])=><div className={'stay-stat '+tone} key={label}><span className="stay-stat-icon"><BedDouble size={17}/></span><div><strong>{value}</strong><span>{label}</span></div></div>)}</section><div className="stay-snapshot-caption">Shown inventory · snapshot for {dateLabel(days[0],{day:'numeric',month:'short',year:'numeric'})}</div>
@@ -31,7 +61,8 @@ export default function StayChart({data,days,today,onBook,onStay,onRelease,onMov
  <div className="stay-scroll" tabIndex={0} aria-label="Stay chart — scroll for more dates and units"><table className="stay-table" style={{'--stay-days':days.length}}><colgroup><col className="stay-label-col"/>{days.map(day=><col className="stay-day-col" key={day}/>)}</colgroup><thead><tr><th className="stay-label" scope="col">Room / dorm <small>Numbers show free units</small></th>{days.map(day=><th scope="col" key={day} className={(day===today?'is-today ':'')+([0,6].includes(new Date(day+'T12:00:00Z').getUTCDay())?'is-weekend':'')}><small>{dateLabel(day,{weekday:'short'})}</small><strong>{dateLabel(day,{day:'2-digit'})}</strong><small>{day===today?'Today':dateLabel(day,{month:'short'})}</small></th>)}</tr></thead>
  <tbody>{groups.map(group=><Group key={group.key} group={group} open={expanded.has(group.key)} toggle={()=>toggle(group.key)} days={days} today={today} index={index} bookingMap={bookingMap} renderUnit={unitRow}/>)}{!groups.length&&<tr><td colSpan={days.length+1} className="stay-no-results">No matching inventory. Change the filter or search.</td></tr>}</tbody>
  <tfoot><tr><th scope="row" className="stay-label">Available</th>{days.map(day=>{const summary=stayDaySummary(shown,day,index,bookingMap);return <td key={day} className="stay-availability" title={summary.vacant+' free of '+summary.total+' total; '+summary.blocked+' blocked'}>{summary.vacant}</td>;})}</tr><tr><th scope="row" className="stay-label">Occupancy</th>{days.map(day=>{const summary=stayDaySummary(shown,day,index,bookingMap);return <td key={day} className="stay-occupancy" title={`${summary.booked} booked / ${summary.capacity} sellable units (maintenance excluded)`}><strong>{summary.capacity?Math.round(summary.occupancy)+'%':'—'}</strong><span><i style={{width:Math.min(100,summary.occupancy)+'%'}}/></span>{summary.conflicts>0&&<small className="stay-conflict-count">{summary.conflicts} conflict</small>}</td>;})}</tr></tfoot></table></div>
- <footer className="stay-legend" aria-label="Stay status legend">{[['occupied','Checked in'],['reserved','Reserved'],['due-out','Due out today'],['blocked','Blocked'],['held','Held / review'],['departed','Checked out'],['conflict','Conflict']].map(([status,label])=><span key={status}><i className={status}/>{label}</span>)}<p>Occupancy includes reserved nights. Click an empty night to book; drag a stay to move the dropped night.</p></footer></section>
+ {resizePreview&&<p role="status" className="notice">{resizePreview.problem||'New checkout: '+resizePreview.departure+'. Release to review the extension and price.'}</p>}
+ <footer className="stay-legend" aria-label="Stay status legend">{[['occupied','Checked in'],['reserved','Reserved'],['due-out','Due out today'],['blocked','Blocked'],['held','Held / review'],['departed','Checked out'],['conflict','Conflict']].map(([status,label])=><span key={status}><i className={status}/>{label}</span>)}<p>Occupancy includes reserved nights. Click an empty night to book; drag a stay to move the dropped night. Drag its right-edge handle to extend checkout (mouse or touch).</p></footer></section>
  {conflict&&<div className="stay-conflict-notice" role="alert"><strong>{conflict.unit.label} · {conflict.day}: {conflict.held?"allocation needs review":"conflicting allocations"}</strong><div>{conflict.held&&<p>This stored allocation still holds these nights. Refresh and ask the property owner to review its booking.</p>}{conflict.entries.filter(a=>a.status==="MAINTENANCE"||bookingMap.has(a.reservationDbId)).map(a=><button type="button" key={a.id} onClick={()=>{a.status==='MAINTENANCE'?onRelease(a):onStay(a,conflict.day);setConflict(null);}}>{a.guestName||a.reason||'Blocked'} — Review</button>)}<button type="button" onClick={()=>setConflict(null)}>Dismiss</button></div></div>}
  </>;
 }

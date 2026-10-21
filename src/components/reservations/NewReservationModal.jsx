@@ -1,10 +1,11 @@
+import './maintenance-switch.css';
 import PhoneInput from '../../features/rooms/components/PhoneInput';
 import {phoneCountry} from '../../features/rooms/utils/phoneInput';
 import {getCountryCallingCode,parsePhoneNumberFromString} from 'libphonenumber-js/max';
 import {usePropertyData} from '../../features/reservations/hooks/usePropertyData';
 import React, { useEffect, useState } from 'react';
 import Modal from '../ui/Modal';
-import { createBooking, databaseError, markMaintenance } from '../../services/stayman';
+import { createBooking, databaseError, db } from '../../services/stayman';
 import { nextDay } from '../../features/allocation/utils/allocationMove';
 import { defaultBookingStatus, destinationError } from '../../features/reservations/utils/bookingActions';
 import { useStaff } from '../auth/StaffGate';
@@ -63,6 +64,7 @@ export default function NewReservationModal({ isOpen, onClose, units:initialUnit
   async function save(event) {
     event.preventDefault(); if(busy)return;setError('');
     if (!form.unitId) { setError('Choose a bed or room.'); return; }
+    if(maintenance&&(!form.checkInDate||!form.checkOutDate||form.checkOutDate<=form.checkInDate||nights(form.checkInDate,form.checkOutDate)>366)){setError('Choose a maintenance range of 1-366 nights.');return;}
     if (!maintenance && (!form.guestName.trim() || form.checkOutDate <= form.checkInDate || Number(form.paid) > Number(form.total))) {
       setError('Check the guest name, departure date and payment amounts.'); return;
     }
@@ -76,9 +78,9 @@ export default function NewReservationModal({ isOpen, onClose, units:initialUnit
       if(latest.error)throw latest.error;
       if(!latest.data)throw new Error('Could not check current availability. Refresh and try again.');
       const currentUnit=latest.data.units.find(unit=>unit.id===form.unitId);
-      const unavailable=destinationError(currentUnit,maintenance?null:{gender:form.gender},latest.data.allocations,null,form.checkInDate,maintenance?nextDay(form.checkInDate):form.checkOutDate);
+      const unavailable=destinationError(currentUnit,maintenance?null:{gender:form.gender},latest.data.allocations,null,form.checkInDate,form.checkOutDate);
       if(unavailable)throw new Error(unavailable);
-      if (maintenance) await markMaintenance(form.unitId, form.checkInDate, reason.trim());
+      if (maintenance) {const result=await db().rpc('stayman_block_unit',{p_unit:form.unitId,p_from:form.checkInDate,p_to:form.checkOutDate,p_reason:reason.trim()});if(result.error)throw result.error;}
       else await createBooking(form.unitId, { ...form, guestName: form.guestName.trim(),
         totalAmountPaise: rupeesToPaise(form.total), paidAmountPaise: rupeesToPaise(form.paid) });
       onClose(); await onSaved?.();
@@ -87,19 +89,21 @@ export default function NewReservationModal({ isOpen, onClose, units:initialUnit
       setError(databaseError(err));
     } finally { setBusy(false); }
   }
-  const selectedAvailability=selectedUnit&&form.checkInDate?destinationError(selectedUnit,maintenance?null:{gender:form.gender},allocations,null,form.checkInDate,maintenance?nextDay(form.checkInDate):form.checkOutDate):'';
+  const selectedAvailability=selectedUnit&&form.checkInDate?destinationError(selectedUnit,maintenance?null:{gender:form.gender},allocations,null,form.checkInDate,form.checkOutDate):'';
   const input = (key, label, type = 'text', extra = {}) => <label className="block text-sm font-medium">{label}<input {...extra} type={type} value={form[key] || ''} onChange={e => change(key, e.target.value)} className="mt-1 min-h-11 w-full rounded-lg border p-2" /></label>;
   return <Modal isOpen={isOpen} onClose={() => { if (!busy) onClose(); }} title={maintenance ? 'Mark bed as maintenance' : 'Create Reservation / Walk-In'}>
     <form onSubmit={save} className="space-y-4"><fieldset disabled={busy} className="space-y-4">
-      <label className="flex items-center gap-3 rounded-lg bg-slate-50 p-3"><input type="checkbox" checked={maintenance} onChange={e => { setMaintenance(e.target.checked); setError(''); }} />Mark as maintenance</label>
+      <div className="maintenance-mode-row"><span id="maintenance-mode-label">Mark as maintenance</span><button type="button" role="switch" aria-checked={maintenance} aria-labelledby="maintenance-mode-label" className="maintenance-mode-switch" onClick={()=>{setMaintenance(value=>!value);setError('');}}><span/></button></div>
       {!maintenance && <div className="rounded-lg border border-blue-100 bg-blue-50 p-3"><label className="block text-sm font-medium">Available web check-in guests<select aria-label="Available web check-in guests" value={form.webCheckinId||''} onChange={e=>selectWalkin(e.target.value)} className="mt-1 w-full rounded-lg border p-3"><option value="">New guest / enter details manually</option>{walkins.map(w=><option key={w.id} value={w.id}>{w.details.full_name} · {w.details.phone} · {w.details.arrival_date}</option>)}</select></label><p className="mt-2 text-xs text-slate-500">{walkins.length?'Select a submitted walk-in to prefill details and link their ID when saving.':'No unallocated web check-ins yet. New submissions appear here.'}</p></div>}
       <label className="block text-sm font-medium">Bed / room<select aria-label="Bed / room" required value={form.unitId || ''} onChange={e => change('unitId', e.target.value)} className="mt-1 min-h-11 w-full rounded-lg border p-2"><option value="">Select bed or room</option>{units.map(u => {
-        const unavailable=destinationError(u,maintenance ? null : {gender:form.gender},allocations,null,form.checkInDate,maintenance && form.checkInDate ? nextDay(form.checkInDate) : form.checkOutDate);
+        const unavailable=destinationError(u,maintenance ? null : {gender:form.gender},allocations,null,form.checkInDate,form.checkOutDate);
         return <option key={u.id} value={u.id} disabled={!!unavailable}>{u.roomName} / {u.label} ({u.type === 'ROOM' ? 'Private room' : 'Dorm bed'}){unavailable ? ' — '+unavailable : ''}</option>;
       })}</select></label>
       {!units.length && <p role="alert" className="text-sm text-red-600">No beds or rooms are configured for this property. Add stayman_units in Supabase; demo rooms on older screens are not bookable inventory.</p>}
       <p className="text-xs text-slate-500">Occupied beds and incompatible rooms are shown disabled. Change dates or guest gender to see available options.</p>
-      {input('checkInDate', maintenance ? 'Maintenance date (one night)' : 'Arrival date', 'date', { required: true })}
+      {input('checkInDate', maintenance ? 'Maintenance from' : 'Arrival date', 'date', { required: true })}
+      {maintenance&&input('checkOutDate','Available again','date',{required:true,min:form.checkInDate?nextDay(form.checkInDate):undefined})}
+      {maintenance&&<p className="text-xs text-slate-500">Blocked from the start date up to, but excluding, Available again.</p>}
       {maintenance ? <label className="block text-sm font-medium">Description<input required maxLength={50} value={reason} onChange={e => setReason(e.target.value)} className="mt-1 w-full rounded-lg border p-3" /><span className="mt-1 block text-right text-xs text-slate-500" aria-live="polite">{reason.length}/50 characters</span></label> : <>
         {input('checkOutDate', 'Departure date', 'date', { required: true, min: form.checkInDate ? nextDay(form.checkInDate) : undefined })}
         {input('guestName', 'Full name', 'text', { required: true, minLength: 2, maxLength: 100 })}

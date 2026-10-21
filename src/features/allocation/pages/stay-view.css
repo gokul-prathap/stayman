@@ -26,3 +26,10 @@
 @media(min-width:1600px){.stay-view{--stay-label:210px}.stay-table{min-width:calc(var(--stay-label) + var(--stay-days)*74px)}}
 @media(max-width:1000px){.stay-summary{grid-template-columns:repeat(3,minmax(0,1fr))}.stay-stat{padding:9px 11px}.stay-expand-actions{margin-left:0}}
 @media(max-width:767px){.stay-view{--stay-label:145px;gap:11px}.stay-view h1{font-size:21px}.stay-view-title p{font-size:11px}.stay-toolbar{padding:9px;gap:6px}.stay-toolbar .stay-actions{margin-left:0;width:100%}.stay-actions button{flex:1}.stay-period-label{margin-left:auto}.stay-range{font-size:11px}.stay-summary{gap:6px}.stay-stat{gap:6px;padding:8px}.stay-stat-icon{width:27px;height:27px}.stay-stat strong{font-size:17px}.stay-stat div>span{font-size:9px}.stay-chart-tools{padding:9px;gap:8px}.stay-search{flex:1;min-width:120px}.stay-search input{width:100%!important}.stay-inventory select{width:145px!important}.stay-expand-actions{width:100%}.stay-expand-actions button{flex:1}.stay-table .stay-label{padding-left:9px;padding-right:9px}.stay-unit-label>span{max-width:105px}.stay-scroll{max-height:62vh}.stay-legend{gap:9px}}
+.stay-booking-bar{position:relative;min-width:0}
+.stay-booking-bar.can-extend>.stay-pill{padding-right:25px}
+.stay-table .stay-extend-handle{position:absolute;right:0;top:0;display:flex;align-items:center;justify-content:center;width:24px;height:30px;min-height:30px;padding:0;border-radius:0 8px 8px 0;background:#142b4855;color:white;cursor:ew-resize;touch-action:none;user-select:none;z-index:4}
+.stay-extend-handle:focus-visible{outline:2px solid var(--focus,#4778ef);outline-offset:2px}
+.stay-extension-preview{position:absolute;left:100%;top:0;height:30px;background:#4778ef66;border:2px dashed #4778ef;border-radius:0 7px 7px 0;z-index:5;pointer-events:none;white-space:nowrap;font-size:10px;color:var(--foreground,#20344e);padding:5px}
+.stay-extension-preview.is-invalid{background:#ef444455;border-color:#dc2626}
+@media(pointer:coarse){.stay-table .stay-extend-handle{width:30px}.stay-booking-bar.can-extend>.stay-pill{padding-right:31px}}
