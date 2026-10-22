@@ -2,3 +2,11 @@
 # The function validates the access token via getUser and checks the database
 # admin policy. Gateway JWT checks do not support newer publishable keys.
 verify_jwt = false
+
+[functions.aiosell-webhook]
+# Aiosell uses Basic Auth, validated inside the function.
+verify_jwt = false
+
+[functions.aiosell-sync]
+# Validates owner JWT or the separate scheduler secret inside the function.
+verify_jwt = false

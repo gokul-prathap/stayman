@@ -4,7 +4,8 @@ import { usePropertyData } from '../../reservations/hooks/usePropertyData';
 import { saveSettings, databaseError } from '../../../services/stayman';
 import PageState from '../../management/components/PageState';
 import '../../management/management.css';
-const tabs = ['Property','Users','Preferences','System'];
+const AiosellSettings = React.lazy(() => import('../components/AiosellSettings'));
+const tabs = ['Property','Users','Preferences','System','Aiosell'];
 export default function SettingsPage() {
   const { property, reloadProperties } = useStaff();
   const { data, isPending, error, refresh } = usePropertyData({mode:'inventory'});
@@ -25,6 +26,7 @@ export default function SettingsPage() {
   const timezoneOptions = [...new Set(['Asia/Kolkata','UTC','Asia/Bangkok','Europe/London','America/New_York',form.timezone].filter(Boolean))];
   return <section className="management space-y-5"><h1>Settings</h1><p className="subtitle">Manage your property and workspace.</p><div className="tabs" role="tablist" aria-label="Settings section">{tabs.map(t => <button key={t} role="tab" aria-selected={t===tab} onClick={() => setTab(t)}>{t}</button>)}</div><PageState hasData={!!data} pending={isPending} error={error} retry={refresh}/>
     {data && <div className="max-w-3xl">
+      {tab === 'Aiosell' && <React.Suspense fallback={<p>Loading channel manager...</p>}><AiosellSettings key={property.id} property={property} units={data.units || []} /></React.Suspense>}
       {(tab === 'Property' || tab === 'Preferences') && <form onSubmit={save} className="card"><fieldset disabled={true} className="space-y-6"><h2>{tab === 'Property' ? 'Property Details' : 'Regional Preferences'}</h2>
         <p className="notice">Property profile and billing details are read-only. Contact the platform administrator for changes.</p>
         {tab === 'Property' && <>{field('name','Property Name',{required:true,minLength:2,maxLength:100})}{field('address','Address',{maxLength:500})}{field('phone','Contact Phone',{type:'tel',maxLength:25})}<h2>Social links and WhatsApp</h2>{field('instagram_url','Instagram page',{type:'url',maxLength:2048,placeholder:'https://www.instagram.com/yourproperty/',pattern:'https://(www[.])?instagram[.]com/.*'})}{field('whatsapp_number','WhatsApp number',{type:'tel',maxLength:16,placeholder:'+919876543210',pattern:'[+][1-9][0-9]{6,14}',title:'Include the country code, for example +919876543210'})}{field('facebook_url','Facebook page (optional)',{type:'url',maxLength:2048,placeholder:'https://www.facebook.com/yourpage',pattern:'https://(www[.])?(facebook[.]com|fb[.]com)/.*'})}<p className="muted">These links appear on guest web check-in. Leave a field empty to hide it.</p></>}

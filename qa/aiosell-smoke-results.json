@@ -1,0 +1,15 @@
+{
+  "lazy_settings_requests": true,
+  "mapping_fetch": true,
+  "pricing_room_1200_bed_600": true,
+  "individual_room_prices": true,
+  "pricing_view_switch_preserves_edits": true,
+  "grouped_save_preserves_mixed_rates": true,
+  "no_duplicate_price_entry": true,
+  "mapping_follows_pricing": true,
+  "unsaved_sync_disabled": true,
+  "partial_sync_visible": true,
+  "results_persist_on_reload": true,
+  "mobile_panel_visible": true,
+  "errors": []
+}

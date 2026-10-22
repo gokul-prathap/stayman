@@ -1,5 +1,17 @@
 # React + Vite
 
+For when to deploy, exact commands, database order and common errors, see
+[Deployment instructions](docs/DEPLOYMENT.md). Normal pricing/booking updates do
+not require redeployment.
+
+## Aiosell sandbox integration (migration 027)
+
+Deployment, backend secret names, webhook URL, scheduling, test steps and current
+sandbox limitations are documented in [docs/aiosell-setup.md](docs/aiosell-setup.md).
+Apply migration 027 and deploy its two Edge Functions before using Settings > Aiosell.
+For mappings that follow the Pricing page, also apply migrations 028 and 029 in
+order, redeploy `aiosell-sync`, and deploy the current frontend. See the setup guide.
+
 ## Workspace performance update (migration 026)
 
 Apply [`supabase/migrations/202610210026_bounded_workspace_queries.sql`](supabase/migrations/202610210026_bounded_workspace_queries.sql) after migration 025 **before deploying this client**. It adds three staff-authorized read RPCs and supporting indexes. No existing records or write workflows are changed. The client intentionally does not fall back to downloading all historical data if these RPCs are missing.
