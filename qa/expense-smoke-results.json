@@ -1,0 +1,13 @@
+{
+  "browserErrors": [],
+  "allPagesExported": true,
+  "reportDownloaded": true,
+  "partialPayments": true,
+  "supplierRefund": true,
+  "duplicateWarning": true,
+  "receiptUploadMocked": true,
+  "mobileNoOverflow": true,
+  "quickAddFromReport": true,
+  "cpuSlowdown": 4,
+  "calls": 34
+}

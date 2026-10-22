@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { lazy, Suspense, useMemo, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { usePropertyData } from '../../reservations/hooks/usePropertyData';
 import { useStaff } from '../../../components/auth/StaffGate';
@@ -6,7 +6,8 @@ import { dayInZone, shiftDay, reportMetrics, money, nights } from '../utils/metr
 import PageState from '../components/PageState';
 import '../management.css';
 import RefundReport from '../components/RefundReport';
-const tabs = ['Occupancy', 'Revenue', 'ADR', 'Utilization', 'Arrivals/Departures', 'Refunds'];
+const IncomeExpensesReport=lazy(()=>import('../components/IncomeExpensesReport'));
+const tabs = ['Income & Expenses', 'Occupancy', 'Revenue', 'ADR', 'Utilization', 'Arrivals/Departures', 'Refunds'];
 function Chart({ days, field, label, bars = false }) {
   const width = 720, height = 160, padding = 18;
   const max = Math.max(1, ...days.map(d => d[field]));
@@ -24,12 +25,12 @@ function Chart({ days, field, label, bars = false }) {
 }
 export default function ReportsPage() {
   const { property } = useStaff();
-  const [tab, setTab] = useState('Occupancy');
+  const [tab, setTab] = useState('Income & Expenses');
   const [from, setFrom] = useState(() => shiftDay(dayInZone(new Date(), property.timezone), -6));
   const [to, setTo] = useState(() => dayInZone(new Date(), property.timezone));
   const valid = from && to && to >= from && nights(from, to) <= 365;
   const previousFrom=valid?shiftDay(from,-nights(from,shiftDay(to,1))):from;
-  const { data, isPending, error, refresh } = usePropertyData({from:previousFrom,to,enabled:!!valid});
+  const { data, isPending, error, refresh } = usePropertyData({from:previousFrom,to,enabled:!!valid&&tab!=='Income & Expenses'});
   const report = useMemo(() => data && valid ? reportMetrics(data, from, to, property.timezone) : null, [data, from, to, valid, property.timezone]);
   const previous = useMemo(() => data && valid ? reportMetrics(data, shiftDay(from, -nights(from, shiftDay(to, 1))), shiftDay(from, -1), property.timezone) : null, [data, from, to, valid, property.timezone]);
   function exportCSV() {
@@ -39,6 +40,7 @@ export default function ReportsPage() {
     const link = document.createElement('a'); link.href=url; link.download='stayman-report-' + from + '.csv'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   const shift = amount => { setFrom(shiftDay(from, amount)); setTo(shiftDay(to, amount)); };
+  if(tab==='Income & Expenses')return <section className="management space-y-5"><h1>Reports</h1><div className="tabs" role="tablist" aria-label="Report category">{tabs.map(t=><button key={t} role="tab" aria-selected={tab===t} onClick={()=>setTab(t)}>{t}</button>)}</div><Suspense fallback={<p>Loading report?</p>}><IncomeExpensesReport key={property.id}/></Suspense></section>;
   return <section className="management space-y-5">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h1>Reports</h1><p className="subtitle">A clear view of {property.name}'s performance.</p></div><button onClick={exportCSV} disabled={!report} className="secondary flex items-center gap-2"><Download size={15} />Export CSV</button></div>
     <div className="tabs" role="tablist" aria-label="Report category">{tabs.map(t => <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>{t}</button>)}</div>

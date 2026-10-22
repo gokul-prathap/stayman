@@ -52,6 +52,18 @@ body:has(.stayman-topbar) .standalone-theme-toggle{display:none}
  :root[data-theme=light] .dashboard-layout>div>header :is(.text-slate-900,.text-slate-600,.text-slate-500){color:var(--secondary)}
 }
 @media(prefers-reduced-motion:reduce){*,::before,::after{scroll-behavior:auto!important}}
+/* Staff workspace sections share the Aiosell mapping card's light tint. */
+:root:not([data-theme=dark]){--section-surface:#e4ebf5;--section-line:#c7d3e4}
+:root:not([data-theme=dark]) body:has(.stayman-topbar) main :is(.card,.collapsible-card){background:var(--section-surface);border-color:var(--section-line);box-shadow:none}
+:root:not([data-theme=dark]) body:has(.stayman-topbar) main .card :is(.card,.collapsible-card){background:#f2f5fb}
+:root:not([data-theme=dark]) body:has(.stayman-topbar) .dashboard-hero{background:#e4ebf5;border:1px solid #c7d3e4}
+:root:not([data-theme=dark]) body:has(.stayman-topbar) .dashboard-day-card{background:#f4f7fc;border-color:#c7d3e4}
+:root:not([data-theme=dark]) body:has(.stayman-topbar) main :is(th,.tabs){background:#d9e3f1;border-color:#c7d3e4}
+.management :is(a.secondary,button.secondary){display:inline-flex;align-items:center;justify-content:center;gap:6px;line-height:1.35}
+@media(max-width:767px){
+ :root:not([data-theme=dark]) body:has(.stayman-topbar) .dashboard-hero{background:#e4ebf5;color:#1c2d46}
+ :root:not([data-theme=dark]) .dashboard .dashboard-hero :is(h1,.subtitle,.dashboard-date,.dashboard-property-tagline){color:#294970;text-shadow:none}
+}
 @media print{
  :root[data-theme]{color-scheme:light;--page:#fff;--panel:#fff;--raised:#f0f4fb;--foreground:#1c2d46;--secondary:#5b6e89;--subtle:#71839d;--border:#dce5f1;--accent:#315fff}
  html,body,#root{background:#fff!important;color:#1c2d46!important}

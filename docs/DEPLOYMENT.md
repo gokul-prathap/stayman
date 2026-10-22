@@ -1,5 +1,21 @@
 # Stayman deployment instructions
 
+## Expense reports update (031)
+
+1. In Supabase SQL Editor, run
+   `supabase/migrations/202610230031_expense_reports.sql` after migrations through
+   030. This creates the expense ledger and private receipt storage policies,
+   preserves existing bills, and backfills their recorded payments once.
+2. Deploy the frontend. No Edge Function redeployment or new secret is needed.
+3. Test a partially paid bill, a later payment, a supplier refund and a staff
+   reimbursement. Confirm a previous-period unpaid balance remains correct.
+4. Open **Reports → Income & Expenses**, check the electricity/laundry comparison,
+   download CSV, and use **Print / Save PDF**. Test receipt upload and viewing with
+   a property staff account. See [expense setup](operations-expenses.md).
+
+Apply the database update before publishing the client. Do not reapply migrations
+012/013/026 afterward, since they contain older expense/workspace RPC definitions.
+
 Changing prices, mappings, restrictions or reservations does NOT require deployment.
 Deployment is needed when the application code changes. Database migrations and
 Edge Functions are deployed separately from the frontend at stayman.in.

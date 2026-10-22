@@ -1,66 +1,95 @@
-import AppLoader from '../../../components/ui/AppLoader';
-import {IndianRupee,Plus,X} from 'lucide-react';
 import {useEffect,useRef,useState} from 'react';
+import {useQuery} from '@tanstack/react-query';
+import {Link,useLocation} from 'react-router-dom';
 import {useStaff} from '../../../components/auth/StaffGate';
-import {useOperations,operationsMutation,operationsError} from '../hooks/useOperations';
-import {dayInZone,money,rupeesToPaise} from '../utils/metrics';
+import {db} from '../../../services/stayman';
+import {useExpenseList,useExpenseRefresh,expenseRpc,expenseError} from '../hooks/useExpenseData';
+import ExpenseForm,{ExpenseDialog} from '../components/ExpenseForm';
 import {expenseCategories} from '../utils/operations';
+import {dayInZone,money,rupeesToPaise,nights} from '../utils/metrics';
+import {monthStart,categoryLabel,costKinds,downloadCsv} from '../utils/expenseReports';
 import '../management.css';
-const label=value=>value.charAt(0)+value.slice(1).toLowerCase();
-export default function ExpensesPage() {
- const {property}=useStaff();
- const today=dayInZone(new Date(),property.timezone);
- const [from,setFrom]=useState(()=>today.slice(0,8)+'01'),[to,setTo]=useState(today);
- const [page,setPage]=useState(1);
- const {data,isPending,error,refresh}=useOperations({mode:'expenses',from,to,page});
- const pages=Math.max(1,Math.ceil((data?.total||0)/25));
- useEffect(()=>setPage(1),[from,to]);
+import '../components/expense-reports.css';
+import '../components/expense-layout.css';
+
+function Receipt({path}){
+ const [url,setUrl]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+ async function load(){setBusy(true);try{const {data,error}=await db().storage.from('expense-receipts').createSignedUrl(path,120);if(error)throw error;setUrl(data.signedUrl);}catch(e){setError(expenseError(e));}finally{setBusy(false);}}
+ return <span>{url?<a className="secondary inline-block" target="_blank" rel="noopener noreferrer" href={url}>Open receipt</a>:<button className="secondary" disabled={busy} onClick={load}>{busy?'Loading...':'View receipt'}</button>}{error&&<small role="alert">{error}</small>}</span>;
+}
+function History({expense,onClose}){
+ const query=useQuery({queryKey:['expense-history',expense.id],queryFn:()=>expenseRpc('stayman_expense_history',{p_expense:expense.id})});
+ return <ExpenseDialog title={expense.description+' · History'} onClose={onClose}>{query.isPending?<p>Loading...</p>:query.error?<p role="alert">{expenseError(query.error)}</p>:<><h3>Payments and refunds</h3>{query.data.payments.length?<div className="overflow-x-auto"><table><thead><tr><th>Date</th><th>Action</th><th>Amount</th><th>Source</th><th>Recorded by</th></tr></thead><tbody>{query.data.payments.map(p=><tr key={p.id}><td>{p.payment_date}</td><td>{categoryLabel(p.kind)} · {p.method}</td><td>{money(p.amount_paise)}</td><td>{p.source==='STAFF'?expense.staff_name:'Property'}</td><td>{p.actor_label||'Staff member'}</td></tr>)}</tbody></table></div>:<p>No payments recorded.</p>}<h3 className="mt-4">Entry activity</h3>{query.data.events.map(e=><p key={e.id} className="muted mt-2">{e.created_at} · {e.action} · {e.note} · Recorded by {e.actor_label||'Staff member'}</p>)}</>}</ExpenseDialog>;
+}
+function PaymentAction({action,today,onClose,onSaved}){
+ const e=action.expense,kind=action.kind,b=e.balance||{},remaining=Number(e.amount_paise)-Number(b.paid||0);
+ const limit=kind==='PAYMENT'?remaining:kind==='REIMBURSEMENT'?Number(b.staffOwed||0):Number(b.paid||0)-Number(b.refunded||0);
+ const [amount,setAmount]=useState(String(limit/100)),[day,setDay]=useState(today),[method,setMethod]=useState('UPI'),[source,setSource]=useState(kind==='PAYMENT'?e.paid_by:'PROPERTY'),[reason,setReason]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+ const request=useRef(crypto.randomUUID());
+ const title=kind==='VOID'?'Remove incorrect entry':kind==='REFUND'?'Record supplier refund':kind==='REIMBURSEMENT'?'Reimburse staff member':'Record bill payment';
+ async function save(event){event.preventDefault();if(busy)return;setBusy(true);setError('');try{
+  if(kind==='VOID')await expenseRpc('stayman_void_expense',{p_expense:e.id,p_reason:reason});
+  else await expenseRpc('stayman_expense_payment',{p_expense:e.id,p_kind:kind,p_amount:rupeesToPaise(amount),p_day:day,p_method:method,p_source:source,p_request:request.current,p_note:reason});
+  onSaved(kind==='VOID'?'Incorrect entry removed from totals.':'Payment history updated.');
+ }catch(err){setError(expenseError(err));}finally{setBusy(false);}}
+ return <ExpenseDialog title={title} onClose={()=>!busy&&onClose()}><form onSubmit={save} className="space-y-4"><p>{e.description} · Bill {money(e.amount_paise)}</p>{error&&<p role="alert" className="error">{error}</p>}<fieldset disabled={busy} className="space-y-4">{kind==='VOID'?<><p>This removes the incorrect entry and its payments from reports. It does not refund money. For a real supplier refund, use Record supplier refund.</p><label>Reason<input required minLength={2} maxLength={250} value={reason} onChange={e=>setReason(e.target.value)}/></label></>:<>
+ <p>{kind==='PAYMENT'?'Remaining bill amount':kind==='REIMBURSEMENT'?`Owed to ${e.staff_name}`:'Maximum refund'}: {money(limit)}</p><label>Amount (₹)<input type="number" required min=".01" max={limit/100} step=".01" value={amount} onChange={e=>setAmount(e.target.value)}/></label><label>Date<input type="date" required min={e.expense_date} max={today} value={day} onChange={e=>setDay(e.target.value)}/></label><label>Method<select value={method} onChange={e=>setMethod(e.target.value)}>{['UPI','CASH','CARD','BANK'].map(m=><option key={m}>{m}</option>)}</select></label>{kind==='REFUND'&&<label>Who received the refund?<select value={source} onChange={e=>setSource(e.target.value)}><option value="PROPERTY">Property</option><option value="STAFF">Staff member</option></select></label>}<label>Note (optional)<input maxLength={250} value={reason} onChange={e=>setReason(e.target.value)}/></label><p className="muted">Record money already moved. This does not initiate a transfer.</p></>}
+ <div className="flex gap-3"><button type="button" autoFocus className="secondary" onClick={onClose}>Cancel</button><button className="primary">{busy?'Saving...':'Confirm'}</button></div></fieldset></form></ExpenseDialog>;
+}
+function ExpenseDescription({expense:e}){
+ return <div className="expense-description"><strong>{categoryLabel(e.category)}</strong>{e.description&&e.description.toLowerCase()!==e.category.toLowerCase()&&<p title={e.description}>{e.description}</p>}{e.vendor&&<small>{e.vendor}</small>}{e.cost_kind!=='OPERATING'&&<small>{costKinds[e.cost_kind]}</small>}{e.void_reason&&<small>Removed: {e.void_reason}</small>}{e.receipt_path&&<small>Receipt attached</small>}</div>;
+}
+function ExpenseStatus({expense:e,through}){
+ const b=e.balance||{},due=Math.max(0,Number(e.amount_paise)-Number(b.paid||0));
+ return <div className="expense-status-block"><span className="expense-status">{e.voided_at?'Removed':due?`${e.due_date&&e.due_date<through?'Overdue':'Unpaid'} ${money(due)}`:'Paid'}</span>{due>0&&e.due_date&&<small>Due {e.due_date}</small>}{due>0&&Number(b.paid)>0&&<small>Paid {money(b.paid)}</small>}{Number(b.refunded)>0&&<small>Refunded {money(b.refunded)}</small>}{Number(b.staffOwed)>0&&<small>Owed to {e.staff_name}: {money(b.staffOwed)}</small>}</div>;
+}
+export default function ExpensesPage(){
+ const location=useLocation();
+ const {property}=useStaff(),today=dayInZone(new Date(),property.timezone),params=new URLSearchParams(location.search);
+ const [from,setFrom]=useState(params.get('from')||monthStart(today)),[to,setTo]=useState(params.get('to')||today),[category,setCategory]=useState(params.get('category')||''),[status,setStatus]=useState(params.get('status')||'all');
+ const [search,setSearch]=useState(''),[term,setTerm]=useState(''),[page,setPage]=useState(1),[expanded,setExpanded]=useState(params.get('add')==='1'),[editing,setEditing]=useState(null),[repeat,setRepeat]=useState(false),[action,setAction]=useState(null),[history,setHistory]=useState(null),[message,setMessage]=useState(''),[error,setError]=useState(''),[exporting,setExporting]=useState(false),[opening,setOpening]=useState(false),[filtersOpen,setFiltersOpen]=useState(false);
+ const valid=from&&to&&from<=to&&nights(from,to)<=365;
+ const query=useExpenseList({from:valid?from:'',to,page,search:term,category,status}),refresh=useExpenseRefresh(),card=useRef(null);
+ const summary=useQuery({queryKey:['expenses',property.id,'summary',from,to],enabled:!!valid,queryFn:()=>expenseRpc('stayman_expense_totals',{p_property:property.id,p_from:from,p_to:to})});
+ useEffect(()=>{const timer=setTimeout(()=>{setPage(1);setTerm(search);},300);return()=>clearTimeout(timer);},[search]);
+ const previousProperty=useRef(property.id);
+ useEffect(()=>{if(previousProperty.current===property.id)return;previousProperty.current=property.id;setExpanded(false);setEditing(null);setRepeat(false);setAction(null);setHistory(null);setMessage('');setError('');},[property.id]);
+ useEffect(()=>{if(new URLSearchParams(location.search).get('add')==='1'){setEditing(null);setRepeat(false);setExpanded(true);}},[location.search]);
+ const repeatId=params.get('repeat');
+ const recurring=useQuery({queryKey:['expense-repeat',property.id,repeatId],enabled:!!repeatId,queryFn:()=>expenseRpc('stayman_expense_history',{p_expense:repeatId})});
+ useEffect(()=>{if(recurring.data?.expense){setEditing(recurring.data.expense);setRepeat(true);setExpanded(true);}},[recurring.data]);
+ const data=query.data,totals=summary.data,pages=Math.max(1,Math.ceil(Number(data?.total||0)/25));
  useEffect(()=>{if(data&&page>pages)setPage(pages);},[data,page,pages]);
- const blank=()=>({category:'ELECTRICITY',description:'',vendor:'',amount:'',expense_date:today,due_date:'',units_consumed:'',paid_date:today,method:'UPI',paid:true});
- const [form,setForm]=useState(blank),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[saveError,setSaveError]=useState('');
- const [pay,setPay]=useState(null),[voiding,setVoiding]=useState(null),[reason,setReason]=useState('');
- const request=useRef(null),expenseCard=useRef(null);
- const [expanded,setExpanded]=useState(()=>new URLSearchParams(window.location.search).get('add')==='1'),[editing,setEditing]=useState(null),[editReason,setEditReason]=useState('');
- const change=(key,value)=>{setForm(f=>({...f,[key]:value}));request.current=null;setMessage('');};
- async function save(event) {
-  event.preventDefault();setBusy(true);setSaveError('');setMessage('');
-  try{
-   const amount=rupeesToPaise(form.amount);
-   if(amount<=0) throw new Error('Expense amount must be greater than zero.');
-   if(form.category==='ELECTRICITY'&&form.units_consumed!==''&&(!Number.isFinite(Number(form.units_consumed))||Number(form.units_consumed)<0)) throw new Error('Enter valid electricity units.');
-   request.current ||= crypto.randomUUID();
-   const details={...form,amount_paise:amount,units_consumed:form.category==='ELECTRICITY'?form.units_consumed:'',paid_date:form.paid?form.paid_date:'',method:form.paid?form.method:''};
-   if(editing){const {created_at,...expected}=editing;await operationsMutation('stayman_edit_expense',{p_expense:editing.id,p_details:details,p_expected:expected,p_reason:editReason});}
-   else await operationsMutation('stayman_add_expense',{p_property:property.id,p_request:request.current,p_details:details});
-   setForm(blank());setExpanded(false);setEditing(null);setEditReason('');request.current=null;await refresh();setMessage('Expense saved.');
-  }catch(err){setSaveError(operationsError(err));}finally{setBusy(false);}
+ async function openEntry(entry,kind){
+  if(opening)return;setOpening(true);setError('');
+  try{const result=await expenseRpc('stayman_expense_history',{p_expense:entry.id}),current=result.expense;
+   if(kind==='EDIT'){setEditing(current);setRepeat(false);setExpanded(true);card.current?.scrollIntoView({block:'start'});}
+   else setAction({kind,expense:current});
+  }catch(e){setError(expenseError(e));}finally{setOpening(false);}
  }
- async function update(event) {
-  event.preventDefault();setBusy(true);setSaveError('');setMessage('');
-  try{
-   if(pay) await operationsMutation('stayman_pay_expense',{p_expense:pay.id,p_day:pay.day,p_method:pay.method});
-   else await operationsMutation('stayman_void_expense',{p_expense:voiding.id,p_reason:reason});
-   setPay(null);setVoiding(null);setReason('');await refresh();setMessage('Expense updated.');
-  }catch(err){setSaveError(operationsError(err));}finally{setBusy(false);}
+ async function saved(text){setExpanded(false);setEditing(null);setAction(null);setMessage(text);await refresh();}
+ async function exportEntries(){setExporting(true);setError('');try{
+  const rows=[['Expense history',property.name],['Bill dates',from,to],['Status filter',status],['Historical balances are measured at',to],['Bill date','Category','Type','Description','Supplier','Bill INR','Paid as of end INR','Supplier refunds as of end INR','Unpaid as of end INR','Staff owed INR','Due date','Payer','Staff member','Removed','Receipt attached']];
+  for(let p=1;;p++){
+   const result=await expenseRpc('stayman_expense_list',{p_property:property.id,p_from:from,p_to:to,p_page:p,p_search:term,p_category:category,p_status:status,p_size:100});
+   for(const e of result.expenses){const b=e.balance;rows.push([e.expense_date,categoryLabel(e.category),costKinds[e.cost_kind],e.description,e.vendor,Number(e.amount_paise)/100,Number(b.paid)/100,Number(b.refunded)/100,Math.max(0,Number(e.amount_paise)-Number(b.paid))/100,Number(b.staffOwed)/100,e.due_date,e.paid_by,e.staff_name,e.voided_at?'Yes':'No',e.receipt_path?'Yes':'No']);}
+   if(p*100>=result.total)break;
+  }
+  downloadCsv(`stayman-expenses-${from}-${to}.csv`,rows);
+ }catch(e){setError(expenseError(e));}finally{setExporting(false);}}
+ function renderActions(e){
+  const b=e.balance||{},due=Math.max(0,Number(e.amount_paise)-Number(b.paid||0));
+  return <div className="expense-action-items"><button className="secondary" onClick={()=>setHistory(e)}>History</button>{e.receipt_path&&<Receipt path={e.receipt_path}/>} {!e.voided_at&&<><button className="secondary" disabled={opening} onClick={()=>openEntry(e,'EDIT')}>Edit</button>{due>0&&<button className="secondary" disabled={opening} onClick={()=>openEntry(e,'PAYMENT')}>Record payment</button>}{Number(b.staffOwed)>0&&<button className="secondary" disabled={opening} onClick={()=>openEntry(e,'REIMBURSEMENT')}>Reimburse staff</button>}{Number(b.paid)>Number(b.refunded)&&!e.cost_kind.startsWith('OWNER_')&&<button className="secondary" disabled={opening} onClick={()=>openEntry(e,'REFUND')}>Supplier refund</button>}{e.repeat_monthly&&<button className="secondary" onClick={()=>{setEditing(e);setRepeat(true);setExpanded(true);card.current?.scrollIntoView({block:'start'});}}>Repeat next bill</button>}{data.isOwner&&<button className="secondary expense-remove" disabled={opening} onClick={()=>openEntry(e,'VOID')}>Remove incorrect entry</button>}</>}</div>;
  }
- const valid=from&&to&&from<=to;
- const summary=data?.summary||{incurred:0,paid:0,unpaid:0,units:0};
- const filtered=(data?.expenses||[]).filter(e=>valid&&e.expense_date>=from&&e.expense_date<=to);
- const field=(key,title,props={})=><label>{title}<input {...props} value={form[key]} onChange={e=>change(key,e.target.value)}/></label>;
- return <section className="management space-y-5"><header><h1>Expenses & Bills</h1><p className="subtitle">Track operating costs, laundry charges, linen purchases and electricity usage.</p></header>
- {error&&<p role="alert" className="error">{operationsError(error)} <button onClick={refresh}>Retry</button></p>}
- {isPending&&<AppLoader label="Loading expenses..."/>}
- {saveError&&<p role="alert" className="error">{saveError}</p>}{message&&<p role="status" className="success">{message}</p>}
- {data&&<><div className="card grid gap-4 sm:grid-cols-2"><label>Expense dates from<input type="date" required value={from} onChange={e=>setFrom(e.target.value)}/></label><label>Through<input type="date" required min={from} value={to} onChange={e=>setTo(e.target.value)}/></label></div>
- {!valid?<p className="error">Choose a valid date range.</p>:<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[['Expenses incurred',money(summary.incurred)],['Paid in date range',money(summary.paid)],['Unpaid through end date',money(summary.unpaid)],['Electricity units (kWh)',Number(summary.units).toLocaleString('en-IN')]].map(([title,value])=><article className="card" key={title}><p className="muted">{title}</p><p className="metric">{value}</p></article>)}</div>}
- <div ref={expenseCard} className="card"><button type="button" aria-label={expanded?'Close expense form':'Add expense'} aria-expanded={expanded} aria-controls="expense-details-form" disabled={busy} onClick={()=>{setExpanded(v=>!v);setEditing(null);setEditReason('');setForm(blank());setSaveError('');request.current=null;}} className="flex w-full items-center justify-between gap-3 text-left"><span className="flex items-center gap-3"><span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white shadow-md"><IndianRupee size={23} aria-hidden="true"/></span><span><span className="block text-lg font-semibold">{editing?'Edit expense':'Add expense'}</span><span className="muted block">Record bills and operating costs.</span></span></span>{expanded?<X size={20} aria-hidden="true"/>:<Plus size={20} aria-hidden="true"/>}</button>
- {expanded&&<form id="expense-details-form" className="mt-5 space-y-4 border-t pt-5" onSubmit={save}><fieldset disabled={busy} className="space-y-4"><h2>{editing?'Update expense details':'New expense details'}</h2><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><label>Category<select value={form.category} onChange={e=>change('category',e.target.value)}>{expenseCategories.map(c=><option key={c}>{c}</option>)}</select></label>{field('description','Description',{required:true,minLength:2,maxLength:250})}{field('amount','Amount (INR)',{type:'number',required:true,min:'.01',max:'100000000',step:'.01'})}{field('expense_date','Expense / bill date',{type:'date',required:true,max:today})}{field('vendor','Vendor / paid to',{maxLength:100})}{field('due_date','Due date (optional)',{type:'date'})}{form.category==='ELECTRICITY'&&field('units_consumed','Units consumed (kWh, optional)',{type:'number',min:0,max:9999999999,step:'.01'})}</div>
- <label className="flex items-center gap-2"><input type="checkbox" checked={form.paid} onChange={e=>change('paid',e.target.checked)}/>Already paid</label>
- {form.paid&&<div className="grid gap-4 sm:grid-cols-2">{field('paid_date','Payment date',{type:'date',required:true,max:today})}<label>Payment method<select value={form.method} onChange={e=>change('method',e.target.value)}>{['CASH','UPI','CARD','BANK'].map(m=><option key={m}>{m}</option>)}</select></label></div>}
- <p className="muted">Enter purchases and laundry charges here once. Stock movements do not create expenses automatically. Paid means money already paid; this form does not transfer money.</p>{editing&&<label>Reason for correction<input required minLength={2} maxLength={250} value={editReason} onChange={e=>setEditReason(e.target.value)}/></label>}<div className="flex gap-2"><button className="primary">{busy?'Saving...':editing?'Save changes':'Save expense'}</button><button type="button" className="secondary" onClick={()=>{setExpanded(false);setEditing(null);}}>Cancel</button></div></fieldset></form>}</div>
- <div className="card"><h2>Expense history</h2><p className="muted mt-2">Amounts are costs on the bill date. Paid totals use the actual payment date. Staff can edit entries with a correction reason. Owners can void incorrect entries.</p><div className="overflow-x-auto mt-4"><table><thead><tr>{['Date','Category / description','Vendor','Units','Amount','Status','Actions'].map(t=><th key={t}>{t}</th>)}</tr></thead><tbody>{filtered.map(e=><tr key={e.id} className={e.voided_at?'opacity-50':''}><td>{e.expense_date}</td><td><strong>{label(e.category)}</strong><p>{e.description}</p>{e.due_date&&<small>Due {e.due_date}</small>}{e.void_reason&&<p>Voided: {e.void_reason}</p>}</td><td>{e.vendor||'—'}</td><td>{e.units_consumed??'—'}</td><td>{money(e.amount_paise)}</td><td>{e.voided_at?'Voided':e.paid_date?'Paid '+e.paid_date:e.due_date&&e.due_date<today?'Overdue':'Unpaid'}</td><td><div className="flex gap-2">{!e.voided_at&&<button disabled={busy} className="secondary" onClick={()=>{setEditing(e);setExpanded(true);setEditReason('');setSaveError('');setForm({...blank(),...e,amount:(Number(e.amount_paise)/100).toFixed(2),units_consumed:e.units_consumed??'',due_date:e.due_date||'',paid:!!e.paid_date,paid_date:e.paid_date||today,method:e.method||'UPI'});requestAnimationFrame(()=>expenseCard.current?.scrollIntoView({behavior:'smooth',block:'start'}));}}>Edit</button>}{!e.voided_at&&!e.paid_date&&<button disabled={busy} className="secondary" onClick={()=>{setPay({id:e.id,day:today,method:'UPI'});setVoiding(null);}}>Mark paid</button>}{!e.voided_at&&data.isOwner&&<button disabled={busy} className="secondary" onClick={()=>{setVoiding(e);setPay(null);setReason('');}}>Void</button>}</div></td></tr>)}{!filtered.length&&<tr><td colSpan="7">No expenses in this date range.</td></tr>}</tbody></table></div></div>
- <div className="flex items-center gap-3"><button className="secondary" disabled={page<=1||isPending} onClick={()=>setPage(p=>p-1)}>Previous</button><span>Page {page} of {pages} ? {data?.total||0} expenses</span><button className="secondary" disabled={page>=pages||isPending} onClick={()=>setPage(p=>p+1)}>Next</button></div>
- {(pay||voiding)&&<div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/40 p-4"><form onSubmit={update} role="dialog" aria-modal="true" aria-labelledby="expense-action" className="card w-full max-w-md space-y-4"><h2 id="expense-action">{pay?'Record payment':'Void incorrect expense'}</h2><fieldset disabled={busy} className="space-y-4">{pay?<><label>Payment date<input type="date" required max={today} value={pay.day} onChange={e=>setPay(v=>({...v,day:e.target.value}))}/></label><label>Method<select value={pay.method} onChange={e=>setPay(v=>({...v,method:e.target.value}))}>{['CASH','UPI','CARD','BANK'].map(m=><option key={m}>{m}</option>)}</select></label></>:<><p className="muted">This corrects the expense record and removes it from totals. It does not refund money.</p><label>Reason<input required minLength={2} maxLength={250} value={reason} onChange={e=>setReason(e.target.value)}/></label></>}
- {saveError&&<p role="alert" className="error">{saveError}</p>}<div className="flex gap-2"><button className="primary">Confirm</button><button type="button" className="secondary" onClick={()=>{setPay(null);setVoiding(null);}}>Cancel</button></div></fieldset></form></div>}
- </>}</section>;
+ return <section className="management expenses-page space-y-5"><header className="expense-page-header"><div><h1>Expenses & Bills</h1><p className="subtitle">Record each bill once. Track payments and what is still owed.</p></div><div className="expense-page-tools"><button className="secondary" disabled={!valid||exporting||!data} onClick={exportEntries}>{exporting?'Preparing all entries...':'Download expenses CSV'}</button>{data?.isOwner&&<Link className="secondary" to="/reports">Income & Expenses report</Link>}</div></header>
+  {(error||query.error||summary.error||recurring.error)&&<p role="alert" className="error">{error||expenseError(query.error||summary.error||recurring.error)}</p>}{message&&<p role="status" className="success">{message}</p>}
+
+  {!valid&&<p role="alert" className="error">Choose a date range of up to 366 days.</p>}
+  {totals&&valid&&<div className="finance-metrics">{[['Operating expenses',totals.incurred],['Operating costs paid',totals.paid],['Bills unpaid at end date',totals.unpaid],['Staff reimbursements due',totals.staffOwed]].map(([label,value])=><article className="card" key={label}><p className="muted">{label}</p><p className="metric">{money(value)}</p></article>)}</div>}
+  <div ref={card}>{expanded?<ExpenseForm key={property.id+(editing?.id||'new')+repeat} editing={editing} repeat={repeat} isOwner={data?.isOwner} onClose={()=>{setExpanded(false);setEditing(null);setRepeat(false);}} onSaved={saved}/>:<button className="primary" onClick={()=>{setEditing(null);setRepeat(false);setExpanded(true);setMessage('');}}>+ Add expense</button>}</div>
+  <details className="card expense-filters" open={filtersOpen} onToggle={e=>setFiltersOpen(e.currentTarget.open)}><summary>Search expenses filter <span>{from} to {to}{category?" / "+categoryLabel(category):""}{status!=="all"?" / "+status:""}</span></summary><div className="expense-filter-grid"><label>Bill dates from<input type="date" value={from} onChange={e=>{setPage(1);setFrom(e.target.value);}}/></label><label>Through<input type="date" value={to} max={today} min={from} onChange={e=>{setPage(1);setTo(e.target.value);}}/></label><label>Find an expense<input type="search" placeholder="Supplier, note or staff" maxLength={100} value={search} onChange={e=>setSearch(e.target.value)}/></label><label>Show<select value={status} onChange={e=>{setPage(1);setStatus(e.target.value);}}>{[['all','All entries'],['unpaid','Unpaid bills'],['overdue','Overdue bills'],['staff','Staff reimbursements'],['missing_receipt','Missing receipts']].map(([v,t])=><option value={v} key={v}>{t}</option>)}</select></label><label>Category<select value={category} onChange={e=>{setPage(1);setCategory(e.target.value);}}><option value="">All categories</option>{expenseCategories.map(c=><option value={c} key={c}>{categoryLabel(c)}</option>)}</select></label><button className="secondary self-end" onClick={refresh} disabled={query.isFetching}>Refresh</button></div></details>
+  <div className="card expense-history"><div className="expense-history-heading"><h2>Expense history</h2><span className="muted">{data?.total||0} entries</span></div><details className="expense-history-help"><summary>About these figures</summary><p className="muted">Costs use bill dates; cash uses payment dates. Balances are as of {to}. Outstanding filters include older bills. Summary cards cover all categories, regardless of list search.</p></details>{query.isPending&&valid&&<p role="status">Loading expenses...</p>}<div className="expense-history-list">{(data?.expenses||[]).map(e=><details key={e.id} className={'expense-history-row expense-mobile-entry'+(e.voided_at?' expense-removed':'')}><summary><time dateTime={e.expense_date} title={e.expense_date}>{new Date(e.expense_date+'T00:00:00Z').toLocaleDateString('en-GB',{day:'2-digit',month:'short',timeZone:'UTC'})}</time><span className="expense-row-label" title={e.description}>{e.description||categoryLabel(e.category)}</span><strong>{money(e.amount_paise)}</strong><span className="expense-row-chevron" aria-hidden="true">&#8964;</span></summary><div className="expense-row-details"><p className="muted mb-2">Bill date: {e.expense_date}</p><div className="expense-entry-main"><ExpenseDescription expense={e}/><ExpenseStatus expense={e} through={to}/></div>{renderActions(e)}</div></details>)}{data&&!data.expenses.length&&<p>No expenses match these filters.</p>}</div></div>
+  <div className="expense-pagination"><button className="secondary" disabled={page<=1||query.isFetching} onClick={()=>setPage(p=>p-1)}>Previous</button><span>Page {page} of {pages} · {data?.total||0} entries</span><button className="secondary" disabled={page>=pages||query.isFetching} onClick={()=>setPage(p=>p+1)}>Next</button></div>
+  {action&&<PaymentAction key={action.expense.id+action.kind} action={action} today={today} onClose={()=>setAction(null)} onSaved={saved}/>} {history&&<History expense={history} onClose={()=>setHistory(null)}/>}
+ </section>;
 }

@@ -1,0 +1,59 @@
+import {useState} from 'react';
+import {Link} from 'react-router-dom';
+import {useStaff} from '../../../components/auth/StaffGate';
+import {useFinanceReport,expenseError} from '../hooks/useExpenseData';
+import {dayInZone,money,shiftDay,nights} from '../utils/metrics';
+import {addMonths,monthStart,comparisonPeriod,summarizeFinance,categoryTotals,monthlyFinance,percentChange,categoryLabel,financeCsv,downloadCsv} from '../utils/expenseReports';
+import './expense-reports.css';
+import './expense-layout.css';
+
+const changeText=(a,b)=>{const p=percentChange(a,b);return p===null?'No previous comparison':Math.abs(p)<0.05?'No change':`${p>0?'↑':'↓'} ${Math.abs(p).toFixed(1)}%`;};
+function MonthBars({title,rows,fields,onSelect}){
+ const max=Math.max(1,...rows.flatMap(r=>fields.map(f=>Math.abs(Number(r[f.key]||0)))));
+ const signed=rows.some(r=>fields.some(f=>Number(r[f.key])<0));
+ return <figure className="card expense-chart"><h2>{title}</h2><div className="chart-legend">{fields.map(f=><span key={f.key}><i style={{background:f.color}}/>{f.label}</span>)}</div>
+  <div className="month-bars">{rows.map(r=><button type="button" key={r.label} className="month-bar" onClick={()=>onSelect(r)} aria-label={`${r.label}: ${fields.map(f=>`${f.label} ${r[f.key]===null?'No bill recorded':money(r[f.key])}`).join(', ')}. Select report period.`}>
+   <span className="bar-area">{fields.map(f=><span key={f.key} className={'finance-bar-track'+(signed?' signed':'')}><span style={{height:`${Math.abs(Number(r[f.key]||0))/max*(signed?50:100)}%`,background:f.color,...(signed?{bottom:Number(r[f.key])<0?'auto':'50%',top:Number(r[f.key])<0?'50%':'auto'}:{})}}/><small>{r[f.key]===null?'No bill':money(r[f.key])}</small></span>)}</span><span>{r.label}</span>
+  </button>)}</div><figcaption className="muted">Select a month to update the report. The latest month may be incomplete; missing entries are not proof of zero spending.{signed?' Negative amounts appear below the centre baseline.':''}</figcaption></figure>;
+}
+function UtilityComparison({data,from,to,previous,category}){
+ const a=categoryTotals(data,from,to,category),b=categoryTotals(data,previous.from,previous.to,category),electric=category==='ELECTRICITY';
+ const rows=[['Bill cost',a.bills?money(a.billed):'No bill recorded',b.bills?money(b.billed):'No bill recorded',a.bills&&b.bills?changeText(a.billed,b.billed):'—'],['Supplier refunds',money(a.refunds),money(b.refunds),'—'],['Occupied unit nights',a.occupied,b.occupied,changeText(a.occupied,b.occupied)]];
+ const kwhLabel=v=>!v.bills||v.missingUnits===v.bills?'Not recorded':v.missingUnits?`${v.kwh} (partial)`:v.kwh;
+ if(electric){rows.push(['kWh recorded',kwhLabel(a),kwhLabel(b),!a.missingUnits&&!b.missingUnits?changeText(a.kwh,b.kwh):'Incomplete data'],['Average kWh per bill-day',a.kwhPerDay?.toFixed(2)??'—',b.kwhPerDay?.toFixed(2)??'—',!a.missingPeriod&&!b.missingPeriod&&a.kwhPerDay!==null&&b.kwhPerDay!==null?changeText(a.kwhPerDay,b.kwhPerDay):'Incomplete data']);}
+ else {rows.push(['Pieces recorded',a.pieces||'—',b.pieces||'—',changeText(a.pieces,b.pieces)],['Billed cost / piece',a.pieces?money(a.piecesCost/a.pieces):'—',b.pieces?money(b.piecesCost/b.pieces):'—',a.pieces&&b.pieces?changeText(a.piecesCost/a.pieces,b.piecesCost/b.pieces):'—'],['kg recorded',a.kg||'—',b.kg||'—',changeText(a.kg,b.kg)],['Billed cost / kg',a.kg?money(a.kgCost/a.kg):'—',b.kg?money(b.kgCost/b.kg):'—',a.kg&&b.kg?changeText(a.kgCost/a.kg,b.kgCost/b.kg):'—']);}
+ const costChange=percentChange(a.billed,b.billed),occupancyChange=percentChange(a.occupied,b.occupied);
+ return <article className="card"><div className="flex justify-between gap-3"><h2>{categoryLabel(category)} comparison</h2><span>{a.bills&&b.bills?changeText(a.billed,b.billed):'No previous comparison'}</span></div>
+  <div className="overflow-x-auto"><table><thead><tr><th>Measure</th><th>Selected period</th><th>Previous period</th><th>Change</th></tr></thead><tbody>{rows.map(([label,c,p,change])=><tr key={label}><td>{label}</td><td>{c}</td><td>{p}</td><td>{change}</td></tr>)}</tbody></table></div>
+  {electric?<p className="notice mt-3">{a.missingUnits||b.missingUnits?'Add kWh to every electricity bill for a complete consumption comparison. ':''}{a.missingPeriod||b.missingPeriod?'Add billing periods to compare daily consumption. ':'Average consumption uses total recorded kWh divided by total billed days across bills. '}Bill amounts can also change because of tariffs and fixed charges.</p>:<p className="notice mt-3">{costChange!==null&&occupancyChange!==null?`Bill cost changed ${costChange.toFixed(1)}%; occupied unit nights changed ${occupancyChange.toFixed(1)}%. `:''}Unit prices use only bills with recorded quantities; pieces and kilograms stay separate. Occupied unit nights combine beds and rooms; they are context, not a per-guest efficiency measure.</p>}
+  <Link className="secondary inline-block mt-3 no-print" to={`/expenses?from=${from}&to=${to}&category=${category}`}>View {categoryLabel(category).toLowerCase()} bills</Link>
+ </article>;
+}
+export default function IncomeExpensesReport(){
+ const {property}=useStaff(),today=dayInZone(new Date(),property.timezone);
+ const [from,setFrom]=useState(monthStart(today)),[to,setTo]=useState(today),[preset,setPreset]=useState('This month');
+ const valid=!!from&&!!to&&from<=to&&nights(from,to)<=365;
+ const prev=valid?comparisonPeriod(from,to):{from,to};
+ const historyStart=addMonths(monthStart(to||today),-5),start=[from,prev.from,historyStart].sort()[0];
+ const query=useFinanceReport(start,to,valid),data=query.data,s=data&&valid?summarizeFinance(data,from,to):null;
+ const selectPeriod=value=>{setPreset(value);if(value==='Today'){setFrom(today);setTo(today);}if(value==='This month'){setFrom(monthStart(today));setTo(today);}if(value==='Last month'){setFrom(addMonths(monthStart(today),-1));setTo(shiftDay(monthStart(today),-1));}};
+ const billLink=(status='all',category='',a=from,b=to)=>`/expenses?from=${a}&to=${b}&status=${status}&category=${category}`;
+ const categories=[...new Set([...(data?.categories||[]),...(data?.refunds||[])].filter(r=>r.cost_kind==='OPERATING'&&r.day>=from&&r.day<=to).map(r=>r.category))].map(category=>({category,...categoryTotals(data,from,to,category)})).sort((a,b)=>b.amount-a.amount);
+ const monthly=data?monthlyFinance(data,to):[];
+ return <section id="income-expenses-report" className="space-y-5">
+  <header className="flex flex-wrap justify-between gap-3"><div><h2>Income & Expenses</h2><p>{property.name} · {from} to {to} · INR</p></div><div className="flex flex-wrap gap-2 no-print"><button type="button" className="secondary" disabled={!s} onClick={()=>downloadCsv(`stayman-financial-report-${from}-${to}.csv`,financeCsv(data,from,to,property.name))}>Download report CSV</button><button type="button" className="secondary" disabled={!s} onClick={()=>{document.body.classList.add('printing-finance');window.print();document.body.classList.remove('printing-finance');}}>Print / Save PDF</button></div></header>
+  <div className="card flex flex-wrap gap-3 items-end no-print"><label>Period<select value={preset} onChange={e=>selectPeriod(e.target.value)}>{['This month','Last month','Today','Custom'].map(p=><option key={p}>{p}</option>)}</select></label><label>From<input type="date" value={from} max={today} onChange={e=>{setPreset('Custom');setFrom(e.target.value);}}/></label><label>To<input type="date" value={to} max={today} min={from} onChange={e=>{setPreset('Custom');setTo(e.target.value);}}/></label><button className="secondary" onClick={()=>query.refetch()} disabled={query.isFetching}>Refresh</button></div>
+  {!valid&&<p role="alert" className="error">Choose up to 366 days.</p>}{query.isPending&&valid&&<p role="status">Loading financial report…</p>}{query.error&&<p role="alert" className="error">{expenseError(query.error)}</p>}
+  {s&&<><p className="muted">Compared with {prev.from} to {prev.to}. Month-to-date compares matching elapsed days, capped at the previous month end.</p>
+   <div className="finance-metrics">{[['Stay revenue',s.revenue],['Operating expenses',s.cost],['Operating result',s.result],['Net guest receipts',s.receipts],['Operating expenses paid',s.paid],['Net operating cash movement',s.cash],['Net property cash movement',s.propertyCash],['Bills unpaid at period end',data.outstanding]].map(([label,value])=><article className="card" key={label}><p className="muted">{label}</p><p className="metric">{money(value)}</p></article>)}</div>
+   <p className="notice">Operating result = stay revenue − recorded operating costs. This is not complete accounting profit. Cash uses actual payment dates, excludes opening guest balances, and includes recorded guest refunds. Net property cash also includes equipment, deposits and owner movements. Owner contributions are not revenue. Historical results reflect recorded corrections; unentered bills and costs are not estimated.</p>
+   <article className="card"><h2>Needs attention</h2><div className="attention-links"><Link to={billLink('overdue')}>Overdue bills: {money(data.overdue)}</Link><Link to={billLink('staff')}>Staff awaiting reimbursement: {money(data.staffOwed)}</Link><Link to={billLink('missing_receipt')}>Bills missing receipts: {(data.categories||[]).filter(r=>r.day>=from&&r.day<=to).reduce((sum,r)=>sum+Number(r.missing_receipts||0),0)}</Link></div><p className="muted">Outstanding and overdue balances are measured at {to}; these can include older bills.</p>
+    {to===today&&(data.recurring||[]).filter(e=>addMonths(e.expense_date,1)<=today).length>0&&<details className="mt-3"><summary>Monthly bills to review</summary>{data.recurring.filter(e=>addMonths(e.expense_date,1)<=today).map(e=><p key={e.id}><Link to={`/expenses?repeat=${e.id}`}>Review {e.description} · previous amount {money(e.amount_paise)}</Link></p>)}<p className="muted">Reminders do not create expenses or payments automatically.</p></details>}
+   </article>
+   <MonthBars title="Revenue and operating expenses · six months" rows={monthly} fields={[{key:'revenue',label:'Stay revenue',color:'var(--accent)'},{key:'cost',label:'Operating costs',color:'#b47725'}]} onSelect={r=>{setPreset('Custom');setFrom(r.from);setTo(r.to);}}/>
+   <article className="card"><h2>Where money went</h2><div className="category-bars">{categories.map(r=><Link key={r.category} to={billLink('all',r.category)}><span>{categoryLabel(r.category)}</span><span className="category-track"><i style={{width:`${Math.max(1,Math.max(0,r.amount)/Math.max(1,...categories.map(c=>c.amount))*100)}%`}}/></span><strong>{money(r.amount)}</strong><small>{categoryTotals(data,prev.from,prev.to,r.category).amount>0?changeText(r.amount,categoryTotals(data,prev.from,prev.to,r.category).amount)+' vs previous period':'No previous comparison'}</small></Link>)}</div>{!categories.length&&<p>No operating bills recorded in this period.</p>}<p className="muted">Supplier refunds reduce costs on their refund date. Select a category to see bills.</p></article>
+   <div className="grid gap-5 xl:grid-cols-2">{['ELECTRICITY','LAUNDRY'].map(category=><UtilityComparison key={category} {...{data,from,to,previous:prev,category}}/>)}</div>
+   <details className="card utility-trends"><summary>Electricity and laundry · six-month trends</summary><div className="grid gap-5 xl:grid-cols-2 mt-4">{['ELECTRICITY','LAUNDRY'].map(category=><MonthBars key={category} title={categoryLabel(category)+' bill costs'} rows={monthly.map(r=>{const c=categoryTotals(data,r.from,r.to,category);return {...r,cost:c.bills?c.billed:null};})} fields={[{key:'cost',label:'Recorded bills',color:category==='ELECTRICITY'?'#b47725':'var(--accent)'}]} onSelect={r=>{setPreset('Custom');setFrom(r.from);setTo(r.to);}}/>)}</div></details>
+  </>}
+ </section>;
+}

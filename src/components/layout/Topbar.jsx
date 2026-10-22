@@ -2,9 +2,9 @@ import {ThemeToggle} from '../../theme/ThemeProvider';
 import GlobalSearch from './GlobalSearch';
 import WebCheckinNotifications from './WebCheckinNotifications';
 import { Menu, IndianRupee, LogOut } from 'lucide-react';
-import {useState} from 'react';
+import {lazy,Suspense,useState} from 'react';
 import {Link} from 'react-router-dom';
-import QuickExpenseModal from '../../features/management/components/QuickExpenseModal';
+const QuickExpenseModal=lazy(()=>import('../../features/management/components/QuickExpenseModal'));
 import PropertyLogo from '../ui/PropertyLogo';
 import { property } from '../../config/property';
 
@@ -38,7 +38,7 @@ export function Topbar({ expanded, onToggle }) {
         </div>
       </div>
       {expenseMessage&&<div role="status" className="fixed bottom-20 right-4 z-50 rounded-xl border bg-white p-3 text-sm text-blue-700 shadow-lg"><span>{expenseMessage}</span><button aria-label="Dismiss expense confirmation" className="ml-3" onClick={()=>setExpenseMessage('')}>×</button></div>}
-      {quickExpense&&<QuickExpenseModal onClose={()=>setQuickExpense(false)} onSaved={()=>setExpenseMessage('Expense saved.')}/>}
+      {quickExpense&&<Suspense fallback={<span role="status">Loading expense form...</span>}><QuickExpenseModal key={staff?.property?.id} onClose={()=>setQuickExpense(false)} onSaved={()=>setExpenseMessage('Expense saved.')}/></Suspense>}
     </header>
   );
 }
