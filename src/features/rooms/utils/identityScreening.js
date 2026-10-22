@@ -29,7 +29,21 @@ export function requestManualDocumentReview(blob,options) {
  entry.result={...entry.result,manualReview:true};
  return entry.result;
 }
-export async function screenIdentityPhoto(blob,options={}) {
+let screeningQueue=Promise.resolve();
+const pendingScreenings=new WeakMap();
+export function screenIdentityPhoto(blob,options={}) {
+ const key=screeningKey(options);
+ if(screened.get(blob)?.key===key)return Promise.resolve(screened.get(blob).result);
+ const pending=pendingScreenings.get(blob);
+ if(pending?.key===key)return pending.promise;
+ const promise=screeningQueue.then(()=>runScreening(blob,options));
+ pendingScreenings.set(blob,{key,promise});
+ // Only one OCR engine can allocate memory at a time, even for front/back changes.
+ screeningQueue=promise.catch(()=>{});
+ promise.finally(()=>{if(pendingScreenings.get(blob)?.promise===promise)pendingScreenings.delete(blob);}).catch(()=>{});
+ return promise;
+}
+async function runScreening(blob,options={}) {
  const key=screeningKey(options);
  if(screened.get(blob)?.key===key)return screened.get(blob).result;
  let worker,timer,expired=false;

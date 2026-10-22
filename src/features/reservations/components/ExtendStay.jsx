@@ -5,11 +5,15 @@ import {useRef,useState} from 'react';
 import {extendStay,databaseError} from '../../../services/stayman';
 import {money,shiftDay} from '../../management/utils/metrics';
 import {destinationError} from '../utils/bookingActions';
-export default function ExtendStay({reservation,guest,units,allocations,onSaved,onClose,initialDeparture,initialUnitId}){
- const last=allocations.find(a=>a.reservationDbId===reservation.id&&a.checkOutDate===reservation.check_out_date);
+import {usePropertyData} from '../hooks/usePropertyData';
+export default function ExtendStay({reservation,guest,units:initialUnits,allocations:initialAllocations,onSaved,onClose,initialDeparture,initialUnitId}){
+ const last=initialAllocations.find(a=>a.reservationDbId===reservation.id&&a.checkOutDate===reservation.check_out_date);
  const [unitId,setUnitId]=useState(initialUnitId||last?.unitId||''),[depart,setDepart]=useState(initialDeparture||shiftDay(reservation.check_out_date,1)),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const availability=usePropertyData({mode:'availability',from:reservation.check_out_date,to:depart,enabled:depart>reservation.check_out_date});
+ const units=availability.data?.units||initialUnits,allocations=availability.data?.allocations||initialAllocations;
  const request=useRef(null),target=units.find(u=>u.id===unitId);
  let problem=destinationError(target,guest,allocations,null,reservation.check_out_date,depart),quote=null;
+ if(availability.isPending||availability.error)problem=availability.error?databaseError(availability.error):'Checking added-night availability...';
  try{if(!problem)quote=extendQuote(reservation,target,depart);}catch(e){problem=e.message;}
  const extra=quote?.extra||0;
  const unavailable=units.map(unit=>({unit,reason:destinationError(unit,guest,allocations,null,reservation.check_out_date,depart)})).filter(item=>item.reason);

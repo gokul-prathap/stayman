@@ -1,5 +1,10 @@
+const dateFormatters=new Map();
 export function dayInZone(value = new Date(), timezone = 'Asia/Kolkata') {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value));
+  if(!dateFormatters.has(timezone)){
+    if(dateFormatters.size>=32)dateFormatters.clear();
+    dateFormatters.set(timezone,new Intl.DateTimeFormat('en-CA',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit'}));
+  }
+  return dateFormatters.get(timezone).format(new Date(value));
 }
 export function shiftDay(day, amount) {
   const date = new Date(day + 'T00:00:00Z');
@@ -39,10 +44,16 @@ export function reportMetrics(data, from, to, timezone = 'Asia/Kolkata') {
   const reservations = data.reservations.filter(r => r.status !== 'CANCELLED');
   const validIds = new Set(reservations.map(r => r.id));
   const historicalUnits=data.allUnits||data.units;
+  const archiveDates=new Map(historicalUnits.filter(u=>u.archivedAt).map(u=>[u.id,dayInZone(u.archivedAt,timezone)]));
+  const cashByDay=new Map(),openingByDay=new Map();
+  for(const payment of data.payments||[]){
+    const day=dayInZone(payment.paid_at,timezone),bucket=payment.method==='OPENING'?openingByDay:cashByDay;
+    bucket.set(day,(bucket.get(day)||0)+(payment.kind==='REFUND'?-1:1)*Number(payment.amount_paise));
+  }
   let capacityNights=0;
   const days = [];
   for (let day = from; day <= to; day = shiftDay(day, 1)) {
-    const unitIds=new Set(historicalUnits.filter(u=>!u.archivedAt||day<dayInZone(u.archivedAt,timezone)).map(u=>u.id));
+    const unitIds=new Set(historicalUnits.filter(u=>!u.archivedAt||day<archiveDates.get(u.id)).map(u=>u.id));
     capacityNights+=unitIds.size;
     const occupied = new Set(), blocked = new Set();
     data.allocations.forEach(a => {
@@ -62,7 +73,7 @@ export function reportMetrics(data, from, to, timezone = 'Asia/Kolkata') {
     } else reservations.forEach(r => {
       if (day >= r.check_in_date && day < r.check_out_date) earned += Number(r.total_amount) / nights(r.check_in_date, r.check_out_date);
     });
-    const cash = (data.payments || []).filter(p => p.method !== 'OPENING' && dayInZone(p.paid_at, timezone) === day).reduce((sum, p) => sum + (p.kind === 'REFUND' ? -1 : 1) * Number(p.amount_paise), 0);
+    const cash=cashByDay.get(day)||0;
     days.push({ day, occupied: occupied.size, blocked: blocked.size, available, earned, cash,
       occupancy: available ? occupied.size / available * 100 : 0 });
   }
@@ -70,7 +81,7 @@ export function reportMetrics(data, from, to, timezone = 'Asia/Kolkata') {
   const available = days.reduce((s, d) => s + d.available, 0);
   const earned = Math.round(days.reduce((s, d) => s + d.earned, 0));
   const cash = days.reduce((s, d) => s + d.cash, 0);
-  const opening = (data.payments || []).filter(p => p.method === 'OPENING' && dayInZone(p.paid_at, timezone) >= from && dayInZone(p.paid_at, timezone) <= to).reduce((s, p) => s + Number(p.amount_paise), 0);
+  const opening=[...openingByDay].reduce((sum,[day,amount])=>sum+(day>=from&&day<=to?amount:0),0);
   return { days, occupied, available, earned, cash, opening, occupancy: available ? occupied / available * 100 : 0,
     adr: occupied ? earned / occupied : 0, utilization: capacityNights ? occupied / capacityNights * 100 : 0,
     arrivals: reservations.filter(r => r.check_in_date >= from && r.check_in_date <= to),

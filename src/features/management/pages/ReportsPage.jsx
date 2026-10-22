@@ -24,11 +24,12 @@ function Chart({ days, field, label, bars = false }) {
 }
 export default function ReportsPage() {
   const { property } = useStaff();
-  const { data, isPending, error, refresh } = usePropertyData();
   const [tab, setTab] = useState('Occupancy');
   const [from, setFrom] = useState(() => shiftDay(dayInZone(new Date(), property.timezone), -6));
   const [to, setTo] = useState(() => dayInZone(new Date(), property.timezone));
   const valid = from && to && to >= from && nights(from, to) <= 365;
+  const previousFrom=valid?shiftDay(from,-nights(from,shiftDay(to,1))):from;
+  const { data, isPending, error, refresh } = usePropertyData({from:previousFrom,to,enabled:!!valid});
   const report = useMemo(() => data && valid ? reportMetrics(data, from, to, property.timezone) : null, [data, from, to, valid, property.timezone]);
   const previous = useMemo(() => data && valid ? reportMetrics(data, shiftDay(from, -nights(from, shiftDay(to, 1))), shiftDay(from, -1), property.timezone) : null, [data, from, to, valid, property.timezone]);
   function exportCSV() {
@@ -46,9 +47,9 @@ export default function ReportsPage() {
       <div className="flex gap-2 sm:ml-auto"><button className="secondary" aria-label="Previous period" disabled={!valid} onClick={() => shift(-nights(from, shiftDay(to, 1)))}><ChevronLeft size={17}/></button><button className="secondary" aria-label="Next period" disabled={!valid} onClick={() => shift(nights(from, shiftDay(to, 1)))}><ChevronRight size={17}/></button></div>
     </div>
     {!valid && <p role="alert" className="error">Choose a valid date range of up to 366 days.</p>}
-    <PageState pending={isPending} error={error} retry={refresh} />
-    {report && !error && tab==='Refunds' && <RefundReport data={data} from={from} to={to} timezone={property.timezone}/>}
-    {report && !error && tab!=='Refunds' && <>
+    <PageState hasData={!!data} pending={!!valid&&isPending} error={error} retry={refresh} />
+    {report && tab==='Refunds' && <RefundReport data={data} from={from} to={to} timezone={property.timezone}/>}
+    {report && tab!=='Refunds' && <>
       <div className="grid gap-4 lg:grid-cols-2">
         <article className="card"><h2>{tab === 'Utilization' ? 'Unit Utilization' : 'Occupancy Rate'}</h2><div className="mt-6 flex flex-wrap items-center gap-6">
           <div className="relative h-32 w-32 shrink-0"><svg viewBox="0 0 120 120" role="img" aria-label={report.occupancy.toFixed(1) + ' percent occupancy'}><circle cx="60" cy="60" r="49" fill="none" stroke="var(--theme-border-4b9ea855,#e8eef7)" strokeWidth="9"/><circle cx="60" cy="60" r="49" fill="none" stroke="var(--theme-border-e389bd74,#4772f4)" strokeWidth="9" strokeDasharray={Math.min(100,tab === 'Utilization' ? report.utilization : report.occupancy) * 3.079 + ' 308'} transform="rotate(-90 60 60)" /></svg><span className="absolute inset-0 flex items-center justify-center text-2xl font-bold">{Math.round(tab === 'Utilization' ? report.utilization : report.occupancy)}%</span></div>

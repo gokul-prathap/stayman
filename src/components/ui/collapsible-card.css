@@ -6,6 +6,7 @@
 .card-edge-toggle>svg{flex-shrink:0;transition:transform .2s}
 .card-edge-toggle[aria-expanded=true]>svg{transform:rotate(180deg)}
 .card-edge-toggle:focus-visible{outline:2px solid var(--focus,#4778ef);outline-offset:3px}
+.card-edge-toggle:disabled{cursor:default;opacity:.55}
 .collapsible-card-content{margin-top:16px}
 .collapsible-card-content[hidden]{display:none!important}
 .billing-folio{position:relative}

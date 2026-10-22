@@ -1,56 +1,13 @@
 import { supabase } from './supabase';
+export {databaseError} from './databaseErrors';
 export function db() {
   if (!supabase) throw new Error('Supabase is not configured.');
   return supabase;
-}
-export function databaseError(error) {
-  if (error?.code === '23P01') return 'This bed is occupied or under maintenance for the selected dates. Refresh and choose another bed.';
-  if (/schema cache|does not exist/i.test(error?.message || '')) return 'Database setup is missing. Apply Stayman migrations 006 through 013, then configure the property.';
-  return error?.message || 'Unable to save. Please try again.';
 }
 export async function staffProperties() {
   const { data, error } = await db().from('stayman_properties').select('*').order('name');
   if (error) throw error;
   return data;
-}
-async function allRows(table, propertyId) {
-  const rows = [];
-  for (let offset=0;;offset+=1000) {
-    const { data, error } = await db().from(table).select('*').eq('property_id',propertyId).order('id').range(offset,offset+999);
-    if (error) throw error;
-    rows.push(...data);
-    if (data.length<1000) return { data:rows };
-  }
-}
-export async function loadPropertyData(propertyId) {
-  const results = await Promise.all([
-    allRows('stayman_units',propertyId),allRows('stayman_guests',propertyId),
-    allRows('stayman_reservations',propertyId),allRows('stayman_allocations',propertyId),
-    allRows('stayman_payments',propertyId),
-    db().rpc('stayman_is_owner',{p_property:propertyId}),
-    db().rpc('stayman_team',{p_property:propertyId}),
-    db().rpc('stayman_member_details',{p_property:propertyId}),
-    db().rpc('stayman_walkins',{p_property:propertyId}),
-    allRows('stayman_folio_payments',propertyId).catch(error=>({data:[],error})),
-  ]);
-  for (const result of results.slice(0,9)) if (result.error) throw result.error;
-  if(results[9].error&&!['42P01','PGRST205'].includes(results[9].error.code))throw results[9].error;
-  const [unitResult, guestResult, reservationResult, allocationResult] = results;
-  const allUnits = unitResult.data.sort((a,b) => (a.room_name+a.label).localeCompare(b.room_name+b.label)).map(u => ({ id: u.id, label: u.label, roomName: u.room_name,
-    archivedAt:u.archived_at||null, category: u.unit_type === 'BED' ? 'DORMITORY' : 'PRIVATE', type: u.unit_type, genderPolicy: u.gender_policy, nightlyRatePaise: Number(u.nightly_rate_paise || 0) }));
-  const units=allUnits.filter(u=>!u.archivedAt);
-  const guests = guestResult.data.sort((a,b) => b.created_at.localeCompare(a.created_at));
-  const reservations = reservationResult.data.sort((a,b) => b.created_at.localeCompare(a.created_at));
-  const allocations = allocationResult.data.map(a => {
-    const r = reservations.find(r => r.id === a.reservation_id);
-    const g = guests.find(g => g.id === r?.guest_id);
-    return { id: a.id, unitId: a.unit_id, reservationId: r?.booking_ref, reservationDbId: r?.id,
-      guestName: g?.full_name, phone: g?.phone, gender: g?.gender, nationality: g?.nationality,
-      chargePaise: a.charge_paise == null ? undefined : Number(a.charge_paise), checkInDate: a.check_in_date, checkOutDate: a.check_out_date, status: a.status,
-      totalAmount: (r?.total_amount || 0) / 100, paidAmount: (r?.paid_amount || 0) / 100, reason: a.reason };
-  });
-  const folioPayments=(results[9].data||[]).map(payment=>({...payment,amount_paise:payment.amount,kind:'RECEIPT',folio_receipt:true}));
-  return { units, allUnits, guests, reservations, allocations, payments: [...results[4].data,...folioPayments].sort((a,b) => b.paid_at.localeCompare(a.paid_at)), isOwner: results[5].data, team: results[6].data, members:results[7].data || [], walkins:results[8].data || [] };
 }
 export async function createBooking(unitId, details) {
   const { data, error } = await db().rpc('stayman_create_booking', { p_unit: unitId, p_details: details });

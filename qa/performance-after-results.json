@@ -1,0 +1,122 @@
+[
+  {
+    "rows_per_history_table": 100,
+    "slow": false,
+    "dashboard_ready_s": 0.95,
+    "initial_api_calls": 3,
+    "initial_api_json_bytes": 9998,
+    "phone_chunk_loaded_on_dashboard": false,
+    "idle_62s_calls": 1,
+    "bell_calls": 0,
+    "stayview_navigation_calls": 1,
+    "cached_dashboard_navigation_calls": 1,
+    "navigation_preserved": true,
+    "route_flashes": [],
+    "offline_cached_stayview_visible": true,
+    "heap_used_MB": 7.9,
+    "heap_allocated_MB": 11.88,
+    "dom_nodes": 6416,
+    "long_tasks": {
+      "count": 0,
+      "max_ms": 0,
+      "total_ms": 0
+    },
+    "errors": [],
+    "endpoints": {
+      "stayman_checkin_notifications": 2,
+      "stayman_properties": 1,
+      "stayman_workspace_data": 3
+    },
+    "post_gc_heap_MB": 8.21
+  },
+  {
+    "rows_per_history_table": 100,
+    "slow": true,
+    "dashboard_ready_s": 8.81,
+    "initial_api_calls": 3,
+    "initial_api_json_bytes": 9998,
+    "phone_chunk_loaded_on_dashboard": false,
+    "idle_62s_calls": null,
+    "bell_calls": 0,
+    "stayview_navigation_calls": 1,
+    "cached_dashboard_navigation_calls": 0,
+    "navigation_preserved": true,
+    "route_flashes": [],
+    "offline_cached_stayview_visible": true,
+    "heap_used_MB": 8.01,
+    "heap_allocated_MB": 11.38,
+    "dom_nodes": 6428,
+    "long_tasks": {
+      "count": 23,
+      "max_ms": 499,
+      "total_ms": 3541
+    },
+    "errors": [],
+    "endpoints": {
+      "stayman_checkin_notifications": 1,
+      "stayman_properties": 1,
+      "stayman_workspace_data": 2
+    },
+    "post_gc_heap_MB": 8.26
+  },
+  {
+    "rows_per_history_table": 5000,
+    "slow": false,
+    "dashboard_ready_s": 0.95,
+    "initial_api_calls": 3,
+    "initial_api_json_bytes": 10010,
+    "phone_chunk_loaded_on_dashboard": false,
+    "idle_62s_calls": null,
+    "bell_calls": 0,
+    "stayview_navigation_calls": 1,
+    "cached_dashboard_navigation_calls": 0,
+    "navigation_preserved": true,
+    "route_flashes": [],
+    "offline_cached_stayview_visible": true,
+    "heap_used_MB": 9.41,
+    "heap_allocated_MB": 12.88,
+    "dom_nodes": 6428,
+    "long_tasks": {
+      "count": 0,
+      "max_ms": 0,
+      "total_ms": 0
+    },
+    "errors": [],
+    "endpoints": {
+      "stayman_checkin_notifications": 1,
+      "stayman_properties": 1,
+      "stayman_workspace_data": 2
+    },
+    "post_gc_heap_MB": 8.28
+  },
+  {
+    "rows_per_history_table": 5000,
+    "slow": true,
+    "dashboard_ready_s": 8.51,
+    "initial_api_calls": 3,
+    "initial_api_json_bytes": 10010,
+    "phone_chunk_loaded_on_dashboard": false,
+    "idle_62s_calls": null,
+    "bell_calls": 0,
+    "stayview_navigation_calls": 1,
+    "cached_dashboard_navigation_calls": 0,
+    "navigation_preserved": true,
+    "route_flashes": [],
+    "offline_cached_stayview_visible": true,
+    "heap_used_MB": 8.06,
+    "heap_allocated_MB": 11.63,
+    "dom_nodes": 6460,
+    "long_tasks": {
+      "count": 18,
+      "max_ms": 427,
+      "total_ms": 2740
+    },
+    "errors": [],
+    "endpoints": {
+      "stayman_checkin_notifications": 1,
+      "stayman_properties": 1,
+      "stayman_workspace_data": 2
+    },
+    "post_gc_heap_MB": 8.26
+  }
+]

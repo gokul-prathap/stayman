@@ -10,9 +10,10 @@ import {chargeTypes} from './billingMath';
 import './billing.css';
 
 export default function BillingFolio({reservationId,admin=false}){
- const client=useQueryClient(),query=useQuery({queryKey:['folio',reservationId],queryFn:()=>adminRpc('stayman_folio_preview',{p_reservation:reservationId})});
+ const [open,setOpen]=useState(admin);
+ const client=useQueryClient(),query=useQuery({queryKey:['folio',reservationId],enabled:open,queryFn:()=>adminRpc('stayman_folio_preview',{p_reservation:reservationId})});
  const [reviewed,setReviewed]=useState(false);
- const [open,setOpen]=useState(admin),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
+ const [busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
  const [charge,setCharge]=useState({category:'EARLY_CHECKIN',description:'Early check-in',quantity:'1',amount:'',note:''});
  const [billTo,setBillTo]=useState({name:'',address:'',gstin:''}),[voiding,setVoiding]=useState(null),[reason,setReason]=useState('');
  const [receipt,setReceipt]=useState({amount:'',method:'CASH',note:''});
@@ -32,6 +33,7 @@ export default function BillingFolio({reservationId,admin=false}){
   chargeRequest.current||=crypto.randomUUID();
   await run(async()=>{await adminRpc('stayman_add_folio_charge',{p_reservation:reservationId,p_category:charge.category,p_description:charge.description,p_quantity:Number(charge.quantity),p_amount:amount,p_note:charge.note,p_request:chargeRequest.current});chargeRequest.current=null;setCharge(previous=>({...previous,amount:'',quantity:'1',note:''}));},'Charge added to the draft.');
  }
+ if(!open&&!folio)return <section className="billing-folio"><div className="billing-collapse-heading flex justify-between gap-2"><h2>Invoice preparation</h2><button type="button" className="card-edge-toggle" aria-label="Expand invoice preparation" aria-expanded={false} onClick={()=>setOpen(true)}><ChevronDown size={15}/></button></div></section>;
  if(query.isPending)return <section className="billing-folio"><AppLoader label="Loading billing..."/></section>;
  if(query.error)return <section className="billing-folio"><h2>Invoice preparation</h2><p className="muted">Billing is not available yet. Contact the platform administrator.</p><button type="button" className="secondary" onClick={()=>query.refetch()}>Retry</button></section>;
  const draft=folio.status==='DRAFT',registered=folio.settings.registration==='REGISTERED';

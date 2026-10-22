@@ -1,0 +1,10 @@
+{
+  "draft_visible_before_completion": true,
+  "completion_with_null_guest_id_shows_done": true,
+  "open_group_collapses_on_completion": true,
+  "completed_cards_disabled": true,
+  "document_review_available": true,
+  "contact_binding_requires_explicit_action": true,
+  "no_duplicate_link_or_guest_created": true,
+  "javascript_errors": []
+}

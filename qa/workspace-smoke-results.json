@@ -1,0 +1,43 @@
+{
+  "rows_per_history_table": 100,
+  "slow": false,
+  "dashboard_ready_s": 0.97,
+  "initial_api_calls": 3,
+  "initial_api_json_bytes": 10939,
+  "phone_chunk_loaded_on_dashboard": false,
+  "idle_62s_calls": null,
+  "bell_calls": 0,
+  "stayview_navigation_calls": 1,
+  "cached_dashboard_navigation_calls": 0,
+  "navigation_preserved": true,
+  "route_flashes": [],
+  "offline_cached_stayview_visible": true,
+  "heap_used_MB": 8.28,
+  "heap_allocated_MB": 13.63,
+  "dom_nodes": 6535,
+  "long_tasks": {
+    "count": 0,
+    "max_ms": 0,
+    "total_ms": 0
+  },
+  "errors": [],
+  "endpoints": {
+    "stayman_checkin_notifications": 1,
+    "stayman_properties": 1,
+    "stayman_workspace_data": 2
+  },
+  "post_gc_heap_MB": 8.31,
+  "interaction_checks": {
+    "reservation_page_size": 25,
+    "server_search_and_pagination": true,
+    "historical_detail_and_lazy_billing": true,
+    "extension_availability_query": true,
+    "booking_dates_scope": true,
+    "expenses_paged_rpc": true,
+    "refund_report_scoped": true,
+    "cold_deep_link_no_dashboard": true,
+    "same_user_session_change_keeps_workspace": true,
+    "hidden_polling_paused": true,
+    "offline_polling_paused": true
+  }
+}

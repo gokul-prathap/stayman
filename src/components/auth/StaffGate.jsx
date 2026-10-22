@@ -33,11 +33,15 @@ export default function StaffGate({ children }) {
         .catch(err => { if (active) { setError(databaseError(err)); setProperties([]); } });
     }
     return () => { active = false; };
-  }, [session?.access_token]);
+  }, [session?.user?.id,session?.user?.is_anonymous]);
   useEffect(()=>{
     if(!session||session.user.is_anonymous)return;
-    let active=true;
-    const sync=()=>staffProperties().then(items=>{if(active){setProperties(items);setPropertyId(current=>items.some(p=>p.id===current)?current:items[0]?.id||'');}}).catch(()=>{/* Keep the last loaded profile while offline. */});
+    let active=true,lastSync=Date.now(),inFlight=false;
+    const sync=()=>{
+      if(!navigator.onLine||inFlight||Date.now()-lastSync<300000)return;
+      inFlight=true;
+      staffProperties().then(items=>{if(active){lastSync=Date.now();setProperties(items);setPropertyId(current=>items.some(p=>p.id===current)?current:items[0]?.id||'');}}).catch(()=>{/* Keep the last loaded profile while offline. */}).finally(()=>{inFlight=false;});
+    };
     window.addEventListener('focus',sync);
     return()=>{active=false;window.removeEventListener('focus',sync);};
   },[session?.user?.id]);

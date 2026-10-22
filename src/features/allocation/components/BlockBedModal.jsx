@@ -2,13 +2,17 @@ import {useState} from 'react';
 import Modal from '../../../components/ui/Modal';
 import {db,databaseError} from '../../../services/stayman';
 import {shiftDay,nights} from '../../management/utils/metrics';
-export default function BlockBedModal({units,allocations,start,onClose,onSaved,allocation,initialTo}){
- const [unitId,setUnitId]=useState(allocation?.unitId||units[0]?.id||''),[from,setFrom]=useState(start),[to,setTo]=useState(initialTo||shiftDay(start,1)),[reason,setReason]=useState(allocation?.reason||'Maintenance');
+import {usePropertyData} from '../../reservations/hooks/usePropertyData';
+export default function BlockBedModal({units:initialUnits,allocations:initialAllocations,start,onClose,onSaved,allocation,initialTo}){
+ const [unitId,setUnitId]=useState(allocation?.unitId||initialUnits[0]?.id||''),[from,setFrom]=useState(start),[to,setTo]=useState(initialTo||shiftDay(start,1)),[reason,setReason]=useState(allocation?.reason||'Maintenance');
+ const availability=usePropertyData({mode:'availability',from,to,enabled:!!from&&to>from});
+ const units=availability.data?.units||initialUnits,allocations=availability.data?.allocations||initialAllocations;
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
  const overlaps=id=>allocations.some(a=>a.id!==allocation?.id&&a.unitId===id&&a.checkInDate<to&&a.checkOutDate>from);
  async function save(event){
   event.preventDefault();if(busy)return;setError('');
   if(!from||!to||to<=from||nights(from,to)>366){setError('Choose a block of 1–366 nights.');return;}
+  if(availability.isPending||availability.error){setError('Wait for availability to load, then retry.');return;}
   if(overlaps(unitId)){setError('This unit is already reserved or blocked for some selected nights.');return;}
   setBusy(true);
   try{const {error}=await db().rpc(allocation?'stayman_extend_maintenance':'stayman_block_unit',allocation?{p_allocation:allocation.id,p_expected_to:allocation.checkOutDate,p_to:to}:{p_unit:unitId,p_from:from,p_to:to,p_reason:reason.trim()});if(error)throw error;await onSaved();onClose();}

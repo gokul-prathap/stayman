@@ -1,23 +1,16 @@
 import {useQuery,useQueryClient} from '@tanstack/react-query';
 import {useStaff} from '../../../components/auth/StaffGate';
 import {db} from '../../../services/stayman';
-async function rows(table,property) {
- const result=[];
- for(let offset=0;;offset+=1000) {
-  const {data,error}=await db().from(table).select('*').eq('property_id',property).order('id').range(offset,offset+999);
-  if(error) throw error;
-  result.push(...data);
-  if(data.length<1000) return result;
- }
-}
-export function useOperations() {
- const {property}=useStaff(),client=useQueryClient(),key=['operations',property.id];
- const query=useQuery({queryKey:key,queryFn:async()=>{
-  const [items,movements,expenses,events,owner]=await Promise.all([...['stayman_stock_items','stayman_stock_movements','stayman_expenses','stayman_expense_events'].map(t=>rows(t,property.id)),db().rpc('stayman_is_owner',{p_property:property.id})]);
-  if(owner.error) throw owner.error;
-  return {isOwner:owner.data,items:items.sort((a,b)=>a.name.localeCompare(b.name)),movements:movements.sort((a,b)=>b.created_at.localeCompare(a.created_at)),expenses:expenses.sort((a,b)=>b.expense_date.localeCompare(a.expense_date)||b.created_at.localeCompare(a.created_at)),events};
+import {dayInZone} from '../utils/metrics';
+export function useOperations({mode='stock',from,to,page=1}={}) {
+ const {property}=useStaff(),client=useQueryClient(),today=dayInZone(new Date(),property.timezone);
+ const start=from||today,end=to||today,key=['operations',property.id,mode,start,end,page];
+ const query=useQuery({queryKey:key,enabled:start<=end,queryFn:async({signal})=>{
+  const {data,error}=await db().rpc('stayman_operations_data',{p_property:property.id,p_mode:mode,p_from:start,p_to:end,p_page:page}).abortSignal(signal);
+  if(error)throw error;
+  return data;
  }});
- return {...query,refresh:()=>client.invalidateQueries({queryKey:key})};
+ return {...query,refresh:()=>Promise.all([client.invalidateQueries({queryKey:['operations',property.id]}),client.invalidateQueries({queryKey:['stayman',property.id,'dashboard']})])};
 }
 export async function operationsMutation(name,args) {
  const {data,error}=await db().rpc(name,args);
@@ -25,6 +18,7 @@ export async function operationsMutation(name,args) {
  return data;
 }
 export function operationsError(error) {
+ if(/stayman_operations_data/.test(error?.message||''))return 'Operations data is unavailable. Please contact the property administrator.';
  if(/schema cache|does not exist/i.test(error?.message||'')) return 'Operations setup is missing. Apply migration 012 after 011 in Supabase, then refresh.';
  return error?.message||'Unable to save. Please try again.';
 }

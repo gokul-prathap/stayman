@@ -23,12 +23,12 @@ const PropertyProfilePage = lazy(() => import('../features/billing/PropertyProfi
 
 export function AppRoutes() {
   return (
-    <Suspense fallback={<AppLoader fullPage/>}><Routes>
-      <Route path="/auth/set-password" element={<PasswordSetupPage />} />
-      <Route path="/auth/reset-password" element={<PasswordSetupPage />} />
-      <Route path="/guest-check-in" element={<GuestCheckinPage />} />
-      <Route path="/godfather/*" element={<PlatformAdminPage />} />
-      <Route path="/invoice/:reservationId" element={<InvoicePage />} />
+    <Routes>
+      <Route path="/auth/set-password" element={<Suspense fallback={<AppLoader fullPage/>}><PasswordSetupPage /></Suspense>} />
+      <Route path="/auth/reset-password" element={<Suspense fallback={<AppLoader fullPage/>}><PasswordSetupPage /></Suspense>} />
+      <Route path="/guest-check-in" element={<Suspense fallback={<AppLoader fullPage/>}><GuestCheckinPage /></Suspense>} />
+      <Route path="/godfather/*" element={<Suspense fallback={<AppLoader fullPage/>}><PlatformAdminPage /></Suspense>} />
+      <Route path="/invoice/:reservationId" element={<Suspense fallback={<AppLoader fullPage/>}><InvoicePage /></Suspense>} />
       <Route element={<StaffGate><AppLayout /></StaffGate>}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/stayview" element={<StayViewPage />} />
@@ -44,6 +44,6 @@ export function AppRoutes() {
         <Route path="/property-profile" element={<PropertyProfilePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
-    </Routes></Suspense>
+    </Routes>
   );
 }

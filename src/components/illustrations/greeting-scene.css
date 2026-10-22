@@ -46,3 +46,5 @@
 
 .greeting-transition-sky{animation:greeting-dusk 2.8s ease both}
 @media(prefers-reduced-motion:reduce){.greeting-transition-sky{display:none}}
+
+.greeting-scene[data-paused=true],.greeting-scene[data-paused=true] *{animation-play-state:paused!important}

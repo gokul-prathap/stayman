@@ -19,3 +19,5 @@
 @keyframes night-moon-glow{from{opacity:.1;transform:scale(.92)}to{opacity:.22;transform:scale(1.08)}}
 @keyframes night-star-twinkle{0%,100%{opacity:.35;transform:scale(.8)}50%{opacity:1;transform:scale(1.35)}}
 @media(prefers-reduced-motion:reduce){.night-scene-moon-drift,.night-scene-moon-halo,.night-scene-stars,.night-scene-stars circle{animation:none}}
+
+.night-scene[data-paused=true],.night-scene[data-paused=true] *{animation-play-state:paused!important}

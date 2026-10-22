@@ -3,8 +3,12 @@ import {refundSummary} from '../utils/guestOperations';
 import {dayInZone,money} from '../utils/metrics';
 import Modal from '../../../components/ui/Modal';
 import ReservationDetails from '../../reservations/components/ReservationDetails';
-export default function RefundReport({data,from,to,timezone}) {
+import {usePropertyData} from '../../reservations/hooks/usePropertyData';
+import PageState from './PageState';
+export default function RefundReport({from,to,timezone}) {
+ const {data,isPending,error,refresh}=usePropertyData({mode:'refunds',from,to});
  const [selected,setSelected]=useState(null);
+ if(!data)return <PageState pending={isPending} error={error} retry={refresh}/>;
  const inRange=date=>date&&dayInZone(date,timezone)>=from&&dayInZone(date,timezone)<=to;
  const refunds=data.payments.filter(p=>p.kind==='REFUND');
  const done=refunds.filter(p=>inRange(p.paid_at)).reduce((s,p)=>s+Number(p.amount_paise),0);

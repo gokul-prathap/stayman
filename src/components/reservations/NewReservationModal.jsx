@@ -12,13 +12,12 @@ import { useStaff } from '../auth/StaffGate';
 import { nights, dayInZone, rupeesToPaise, money } from '../../features/management/utils/metrics';
 export default function NewReservationModal({ isOpen, onClose, units:initialUnits = [], allocations:initialAllocations = [], defaultUnitId, defaultDate, defaultCheckinId, onSaved }) {
   const { property } = useStaff();
-  const {data,refresh,refetch,isFetching,error:availabilityError}=usePropertyData();
-  const units=data?.units||initialUnits,allocations=data?.allocations||initialAllocations;
-  const walkins=data?.walkins||[];
   const today = dayInZone(new Date(),property.timezone);
-  useEffect(()=>{if(isOpen)refresh();},[isOpen]);
   const [manualStatus,setManualStatus] = useState(false);
   const [form, setForm] = useState({});
+  const from=form.checkInDate||defaultDate||today,to=form.checkOutDate||nextDay(from);
+  const {data,refresh,refetch,isFetching,error:availabilityError}=usePropertyData({mode:'booking',from,to,enabled:isOpen&&to>from});
+  const units=data?.units||initialUnits,allocations=data?.allocations||initialAllocations,walkins=data?.walkins||[];
   const [manualTotal,setManualTotal] = useState(false);
   const [maintenance, setMaintenance] = useState(false);
   const [reason, setReason] = useState('maintenance');
@@ -60,7 +59,7 @@ export default function NewReservationModal({ isOpen, onClose, units:initialUnit
       nationality:d.foreign_guest?'International':'India',checkInDate:d.arrival_date,checkOutDate:d.departure_date,
       status:defaultBookingStatus(d.arrival_date,today)}));
   }
-  useEffect(()=>{if(isOpen && defaultCheckinId && walkins.some(w=>w.id===defaultCheckinId))selectWalkin(defaultCheckinId);},[isOpen,defaultCheckinId]);
+  useEffect(()=>{if(isOpen && defaultCheckinId && !form.webCheckinId && walkins.some(w=>w.id===defaultCheckinId))selectWalkin(defaultCheckinId);},[isOpen,defaultCheckinId,walkins]);
   async function save(event) {
     event.preventDefault(); if(busy)return;setError('');
     if (!form.unitId) { setError('Choose a bed or room.'); return; }
@@ -83,7 +82,7 @@ export default function NewReservationModal({ isOpen, onClose, units:initialUnit
       if (maintenance) {const result=await db().rpc('stayman_block_unit',{p_unit:form.unitId,p_from:form.checkInDate,p_to:form.checkOutDate,p_reason:reason.trim()});if(result.error)throw result.error;}
       else await createBooking(form.unitId, { ...form, guestName: form.guestName.trim(),
         totalAmountPaise: rupeesToPaise(form.total), paidAmountPaise: rupeesToPaise(form.paid) });
-      onClose(); await onSaved?.();
+      onClose(); await refresh(); await onSaved?.();
     } catch (err) {
       if(err.code==='23P01')await refresh();
       setError(databaseError(err));

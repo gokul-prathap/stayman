@@ -1,12 +1,14 @@
+import {useAnimationActivity} from './useAnimationActivity';
 import {useEffect,useId,useRef,useState} from 'react';
 import './greeting-scene.css';
 
 export default function GreetingScene({period='day'}){
+ const activity=useAnimationActivity();
  const previous=useRef(period);
  const [changing,setChanging]=useState(false);
  useEffect(()=>{if(previous.current!==period){previous.current=period;setChanging(true);}},[period]);
  const id='greeting-'+useId().replace(/:/g,'');
- return <svg className="greeting-scene" data-sky={period} viewBox="0 0 1600 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+ return <svg ref={activity} className="greeting-scene" data-sky={period} viewBox="0 0 1600 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
   <defs>
    <linearGradient id={id+'day'} x2="0" y2="1"><stop stopColor="#46a9ee"/><stop offset="1" stopColor="#c4edff"/></linearGradient>
    <linearGradient id={id+'night'} x2="0" y2="1"><stop stopColor="#050916"/><stop offset="1" stopColor="#101a35"/></linearGradient>

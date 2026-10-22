@@ -1,7 +1,7 @@
 import ExtendStay from '../../reservations/components/ExtendStay';
 import {extensionPlan} from '../utils/stayExtension';
 import AppLoader from '../../../components/ui/AppLoader';
-import React, { useMemo, useState } from 'react';
+import React, {lazy,Suspense,useMemo,useState} from 'react';
 import {useStaff} from '../../../components/auth/StaffGate';
 import StayChart from '../components/StayChart';
 import BlockBedModal from '../components/BlockBedModal';
@@ -12,7 +12,7 @@ import { BedDouble, ChevronLeft, ChevronRight, Plus, RefreshCw, ShieldOff } from
 import { moveError, nextDay } from '../utils/allocationMove';
 import { usePropertyData } from '../../reservations/hooks/usePropertyData';
 import { databaseError, transferReservation, releaseMaintenance } from '../../../services/stayman';
-import NewReservationModal from '../../../components/reservations/NewReservationModal';
+const NewReservationModal=lazy(()=>import('../../../components/reservations/NewReservationModal'));
 import { Drawer } from '../../../components/ui/Drawer';
 import  Modal  from '../../../components/ui/Modal';
 import { transferQuote } from '../../reservations/utils/bookingActions';
@@ -24,7 +24,7 @@ export default function StayViewPage() {
   const today=dayInZone(new Date(),property.timezone);
   const [startDate,setStartDate]=useState(today),[dayCount,setDayCount]=useState(7),[blockOpen,setBlockOpen]=useState(false);
   const [selectedStay, setSelectedStay] = useState(null);
-  const { data, isPending, error: loadError, refresh } = usePropertyData({refetchInterval:30000});
+  const { data, isPending, error: loadError, refresh } = usePropertyData({from:startDate,to:shiftDay(startDate,dayCount),refetchInterval:60000});
   const { units = [], allocations = [] } = data || {};
   const activeStay = allocations.find(item => item.id === selectedStay?.id);
   const [maintenanceExtension,setMaintenanceExtension]=useState(null);
@@ -73,8 +73,8 @@ export default function StayViewPage() {
       {moveMessage&&<p role="status" className="notice">{moveMessage}</p>}
       {isPending&&<AppLoader label="Loading stays..."/>}
       {loadError&&<div role="alert" className="error">{databaseError(loadError)} <button type="button" onClick={refresh}>Retry</button></div>}
-      {data&&!loadError&&<StayChart onExtend={requestExtension} data={data} days={days} today={today} onBook={(unitId,date)=>setCreateModal({isOpen:true,unitId,date})} onStay={(stay,day)=>{setSelectedStay(stay);setSelectedDay(day);}} onRelease={allocation=>{setMaintenance(allocation);setReleaseError('');}} onMove={requestMove} moveProblem={(stayId,unitId,day)=>moveError(allocations.find(a=>a.id===stayId),units.find(u=>u.id===unitId),allocations,units,day)} dragId={dragId} onDragChange={setDragId}/>}
-      {data&&!loadError&&!units.length&&<p className="notice">No rooms or beds configured for this property yet.</p>}
+      {data&&<StayChart onExtend={requestExtension} data={data} days={days} today={today} onBook={(unitId,date)=>setCreateModal({isOpen:true,unitId,date})} onStay={(stay,day)=>{setSelectedStay(stay);setSelectedDay(day);}} onRelease={allocation=>{setMaintenance(allocation);setReleaseError('');}} onMove={requestMove} moveProblem={(stayId,unitId,day)=>moveError(allocations.find(a=>a.id===stayId),units.find(u=>u.id===unitId),allocations,units,day)} dragId={dragId} onDragChange={setDragId}/>}
+      {data&&!units.length&&<p className="notice">No rooms or beds configured for this property yet.</p>}
       {blockOpen&&<BlockBedModal units={units} allocations={allocations} start={startDate} onClose={()=>setBlockOpen(false)} onSaved={async()=>{await refresh();setMoveMessage('Bed / room blocked for the selected nights.');}}/>}
       {maintenanceExtension&&<BlockBedModal units={units} allocations={allocations} start={maintenanceExtension.allocation.checkInDate} allocation={maintenanceExtension.allocation} initialTo={maintenanceExtension.departure} onClose={()=>setMaintenanceExtension(null)} onSaved={async()=>{await refresh();setMoveMessage('Maintenance extended.');}}/>}
       <Modal isOpen={!!extension} onClose={()=>setExtension(null)} title="Confirm stay extension">{extension&&<ExtendStay key={extension.reservation.id+extension.departure} reservation={extension.reservation} guest={extension.guest} units={units} allocations={allocations} initialDeparture={extension.departure} initialUnitId={extension.unit.id} onSaved={async()=>{await refresh();setMoveMessage('Stay extended. Added nights and charges saved.');}} onClose={()=>setExtension(null)}/>}</Modal>
@@ -106,9 +106,9 @@ export default function StayViewPage() {
       <Modal isOpen={!!maintenance} onClose={()=>{if(!moving)setMaintenance(null);}} title="Release maintenance">
        {maintenance&&<div className="space-y-4"><p>Make this bed available again?</p><p className="text-sm text-slate-500">{units.find(u=>u.id===maintenance.unitId)?.label} · {maintenance.checkInDate} to {maintenance.checkOutDate} · {maintenance.reason}</p><p className="text-sm">This releases the entire selected maintenance block.</p>{releaseError&&<p role="alert" className="text-red-600">{releaseError}</p>}<div className="flex gap-2"><button disabled={moving} className="rounded-lg border px-4 py-2" onClick={()=>setMaintenance(null)}>Keep maintenance</button><button disabled={moving} className="rounded-lg bg-brand-600 px-4 py-2 text-white" onClick={async()=>{setMoving(true);setReleaseError('');try{await releaseMaintenance(maintenance.id);setMaintenance(null);await refresh();setMoveMessage('Maintenance released. Bed is available.');}catch(e){setReleaseError(databaseError(e));}finally{setMoving(false);}}}>{moving?'Releasing...':'Confirm release'}</button></div></div>}
       </Modal>
-      <NewReservationModal isOpen={createModal.isOpen} units={units} allocations={allocations}
+      {createModal.isOpen&&<Suspense fallback={<AppLoader label="Loading booking"/>}><NewReservationModal isOpen={createModal.isOpen} units={units} allocations={allocations}
         defaultUnitId={createModal.unitId} defaultDate={createModal.date}
-        onClose={() => setCreateModal({ isOpen: false, unitId: null, date: null })} onSaved={refresh} />
+        onClose={() => setCreateModal({ isOpen: false, unitId: null, date: null })} onSaved={refresh} /></Suspense>}
 
     </section>
   );
