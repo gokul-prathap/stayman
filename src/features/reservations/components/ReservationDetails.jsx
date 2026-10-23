@@ -1,3 +1,4 @@
+import InvoiceAction from '../../billing/InvoiceAction';
 import React,{lazy,Suspense,useRef,useState} from 'react';
 import CollapsibleCard from '../../../components/ui/CollapsibleCard';
 import ExtendStay from './ExtendStay';
@@ -77,6 +78,7 @@ export default function ReservationDetails({ reservationId }) {
   <div className="grid grid-cols-2 gap-4 text-sm"><div><p className="muted">Arrival</p><p>{reservation.check_in_date}</p></div><div><p className="muted">Departure</p><p>{reservation.check_out_date}</p></div></div>
   <div className="space-y-2">{data.allocations.filter(a=>a.reservationDbId===reservation.id).map(a=>{const u=(data.allUnits||data.units).find(u=>u.id===a.unitId);return <p key={a.id} className="muted">{u?.roomName} / {u?.label} · {a.checkInDate} → {a.checkOutDate}</p>;})}</div>
   {active && !panel && <div className="flex flex-wrap gap-2">{reservation.status==='PENDING' && <button className="primary" disabled={busy || !canCheckIn} title={canCheckIn?'Check in guest':'Check-in is available during the booked dates'} onClick={()=>run(()=>checkInReservation(reservation.id),'Guest checked in.')}>Check in guest</button>}<button className="secondary" disabled={busy} onClick={()=>open('edit')}>Edit reservation</button><button className="secondary" disabled={busy} onClick={()=>open('extend')}>Extend stay</button><button className="secondary" disabled={busy} onClick={()=>open('move')}>Move bed / room</button><button className="secondary text-red-600" disabled={busy} onClick={()=>open('cancel')}>Cancel reservation</button></div>}
+  {reservation.status==='CHECKED_IN'&&<InvoiceAction reservationId={reservation.id} className="primary">Check out / print invoice</InvoiceAction>}
   {reservation.status==='CANCELLED' && <div className="notice"><strong>Cancelled:</strong> {reservation.cancellation_reason}<p className="mt-2">Beds have been released. Recorded payments are retained; any refund must be recorded separately.</p></div>}
   {panel==='extend'&&<ExtendStay reservation={reservation} guest={guest} allocations={data.allocations} units={data.units} onSaved={refresh} onClose={()=>setPanel('')}/>}
   {panel==='edit' && <Suspense fallback={<AppLoader label="Loading reservation form"/>}><EditReservation reservation={reservation} guest={guest} allocations={data.allocations} units={data.units} onSaved={refresh} onClose={()=>setPanel('')}/></Suspense>}

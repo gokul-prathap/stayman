@@ -1,0 +1,2 @@
+.guest-modern .checkin-address{min-height:96px;resize:vertical;line-height:1.6}.guest-modern .checkin-address:focus{outline:2px solid var(--focus,#6c95ff);outline-offset:2px}.guest-modern .checkin-address[aria-invalid=true]{border-color:#dc2626}
+:root:not([data-theme=dark]) .guest-modern section.rounded-2xl{background:#e4ebf5;border-color:#c7d3e4}

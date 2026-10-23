@@ -1,3 +1,4 @@
+import {isGuestGender} from '../../../services/guestGender.js';
 import { getCountryCallingCode,parsePhoneNumberFromString } from 'libphonenumber-js/max';
 import isEmail from 'validator/lib/isEmail.js';
 import {identityPolicy} from './identityPolicy.js';
@@ -20,6 +21,9 @@ export function guestFieldErrors(details, today = propertyToday()) {
   if (name.length < 2 || name.length > 100 || !/^[\p{L}\p{M} .’'\-]+$/u.test(name) || !/\p{L}/u.test(name)) {
     errors.full_name = 'Enter your name as shown on your ID (at least 2 characters).';
   }
+  if(!isGuestGender(details.gender))errors.gender='Choose your gender, or select Prefer not to say.';
+  const address=text('address');
+  if(address&&(address.length<5||address.length>500||/[<>\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(address)))errors.address='Enter an address between 5 and 500 characters, without special markup.';
   const email = text('email');
   if (email.length > 254 || !isEmail(email)) errors.email = 'Enter a valid email, such as name@example.com.';
   const phone = text('phone');
@@ -46,7 +50,7 @@ export function guestFieldErrors(details, today = propertyToday()) {
 
 export function validateGuestDetails(details, today = propertyToday()) {
   const cleaned = { ...details };
-  for (const field of ['full_name', 'email', 'phone', 'coming_from', 'going_to']) {
+  for (const field of ['full_name', 'address', 'email', 'phone', 'coming_from', 'going_to']) {
     cleaned[field] = typeof details[field] === 'string' ? details[field].trim() : '';
   }
   const errors = guestFieldErrors(cleaned, today);

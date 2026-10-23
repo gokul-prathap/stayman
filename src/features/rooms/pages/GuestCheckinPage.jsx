@@ -1,3 +1,6 @@
+import {supabase} from '../../../services/supabase';
+import './guest-checkin.css';
+import {genderOptions,genderLabel} from '../../../services/guestGender';
 import {Instagram} from '../../../components/ui/SocialIcons';
 import {identityTypes,identityPolicy} from '../utils/identityPolicy.js';
 import { useEffect, useRef, useState } from 'react';
@@ -16,12 +19,12 @@ import DocumentPreview from '../components/DocumentPreview';
 import ImageCropDialog from '../components/ImageCropDialog';
 import PhotoUploadCard from '../components/PhotoUploadCard';
 import { validateGuestDetails, guestFieldErrors, propertyToday } from '../utils/guestCheckinValidation';
-import { loadPublicProperty, client, openInvitation, openPublicCheckin, guestError, compressIdentityImage, submitGuestCheckin } from '../services/guestCheckinService';
+import { loadPublicProperty, startNextPublicCheckin, client, openInvitation, openPublicCheckin, guestError, compressIdentityImage, submitGuestCheckin } from '../services/guestCheckinService';
 
 function Facebook({size=20}) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14 21v-8h3l.5-4H14V7c0-1.2.4-2 2-2h2V1.4A24 24 0 0 0 15 1c-3 0-5 1.9-5 5.4V9H7v4h3v8z"/></svg>;
 }
-const initial = { full_name: '', email: '', phone: '', phone_country: 'IN', arrival_date: '', departure_date: '', coming_from: '', going_to: '', foreign_guest: false, document_type:'AADHAAR' };
+const initial = { full_name: '', address: '', gender: '', email: '', phone: '', phone_country: 'IN', arrival_date: '', departure_date: '', coming_from: '', going_to: '', foreign_guest: false, document_type:'AADHAAR' };
 
 export default function GuestCheckinPage() {
   const location = useLocation();
@@ -39,11 +42,30 @@ export default function GuestCheckinPage() {
   const [busy, setBusy] = useState(false);
   const [processing, setProcessing] = useState({});
   const [error, setError] = useState('');
+  const [photoErrors,setPhotoErrors]=useState({}),[submittedNow,setSubmittedNow]=useState(false),[staffSession,setStaffSession]=useState(false);
+  const [staffUserId,setStaffUserId]=useState(null);
   const [touched, setTouched] = useState({});
   const [today, setToday] = useState(propertyToday);
   const fieldErrors = guestFieldErrors(details, invitation?.linked ? invitation.arrival_date : today);
+  const nextGuestRequest=useRef(false);
   const versions = useRef({ front: 0, back: 0 });
 
+  useEffect(()=>{
+    if(!supabase)return;
+    let active=true;
+    const updateSession=session=>{if(active){setStaffUserId(session?.user&&session.user.is_anonymous!==true?session.user.id:null);}};
+    supabase.auth.getSession().then(({data})=>updateSession(data.session)).catch(()=>{});
+    const {data}=supabase.auth.onAuthStateChange((_event,session)=>updateSession(session));
+    return()=>{active=false;data.subscription.unsubscribe();};
+  },[]);
+  useEffect(()=>{
+    let active=true;setStaffSession(false);
+    const property=profile.id||propertyId;
+    if(!supabase||!staffUserId||!property)return;
+    supabase.from('stayman_staff').select('property_id').eq('user_id',staffUserId).eq('property_id',property).limit(1)
+      .then(({data,error})=>{if(active)setStaffSession(!error&&Array.isArray(data)&&data.length===1);}).catch(()=>{});
+    return()=>{active=false;};
+  },[staffUserId,profile.id,propertyId]);
   useEffect(() => {
     let active = true;
     setProfile(propertyBranding(null));
@@ -55,7 +77,7 @@ export default function GuestCheckinPage() {
 
   useEffect(() => {
     let active = true;
-    setInvitation(null); setDetails(initial); setError('');
+    setInvitation(null); setDetails(initial); setError('');setSubmittedNow(false);setPhotoErrors({});
     setReviewing(false); setConfirmed(false); setTouched({});
     setPhotos({}); setProcessing({}); setOriginals({}); setCropDraft(null);setCropReview(null);
     versions.current.front++; versions.current.back++;
@@ -78,6 +100,19 @@ export default function GuestCheckinPage() {
     return () => { window.clearInterval(timer); window.removeEventListener('focus', refresh); };
   }, []);
 
+  async function nextGuest(){
+    if(nextGuestRequest.current)return;
+    nextGuestRequest.current=true;setBusy(true);setError('');
+    try{
+      const row=await startNextPublicCheckin(profile.id||propertyId);
+      if(token){window.location.assign('/guest-check-in?property='+encodeURIComponent(profile.id||propertyId));return;}
+      versions.current.front++;versions.current.back++;
+      setInvitation(row);setDetails(initial);setSubmittedNow(false);setTouched({});
+      setPhotos({});setOriginals({});setPhotoErrors({});setProcessing({});setReviewing(false);setConfirmed(false);setCropDraft(null);setCropReview(null);
+    }catch(err){setError(guestError(err));}finally{nextGuestRequest.current=false;setBusy(false);}
+  }
+
+
   function liveProps(name) {
     return { error: touched[name] ? fieldErrors[name] : undefined,
       'aria-invalid': !!(touched[name] && fieldErrors[name]),
@@ -88,30 +123,30 @@ export default function GuestCheckinPage() {
     if (!file) return;
     setCropReview(null);
     const version = ++versions.current[side];
-    setError(''); setProcessing(previous => ({ ...previous, [side]: true }));
+    setPhotoErrors(previous=>({...previous,[side]:''})); setProcessing(previous => ({ ...previous, [side]: true }));
     try {
       const prepared = await prepareMobilePhoto(file);
       if (versions.current[side] === version) setCropDraft({ side, file: prepared });
-    } catch (err) { if (versions.current[side] === version) setError(guestError(err)); }
+    } catch (err) { if (versions.current[side] === version) setPhotoErrors(previous=>({...previous,[side]:guestError(err)})); }
     finally { if (versions.current[side] === version) setProcessing(previous => ({ ...previous, [side]: false })); }
   }
 
   async function applyCrop(crop) {
     const { side, file } = cropDraft;
     const version = ++versions.current[side];
-    setProcessing(previous => ({ ...previous, [side]: true })); setError('');setCropReview(null);
+    setProcessing(previous => ({ ...previous, [side]: true })); setPhotoErrors(previous=>({...previous,[side]:''}));setCropReview(null);
     try {
       const blob = await compressIdentityImage(file, crop);
       const screening=await screenIdentityPhoto(blob,{side,foreign:details.foreign_guest});
       if (versions.current[side] === version) {
-        if(screening.reason==='pan-not-accepted'){setError('PAN cards are not accepted. Please upload Aadhaar, a driving licence, voter ID or passport.');setCropReview(null);return;}
+        if(screening.reason==='pan-not-accepted'){setPhotoErrors(previous=>({...previous,[side]:'PAN cards are not accepted. Please upload Aadhaar, a driving licence, voter ID or passport.'}));setCropReview(null);return;}
         if(!screening.accepted){setCropReview({side,blob,file,version});return;}
         setPhotos(previous => ({ ...previous, [side]: blob }));
         setOriginals(previous => ({ ...previous, [side]: file }));
         setCropDraft(null);
       }
     } catch (err) {
-      if (versions.current[side] === version) setError(guestError(err));
+      if (versions.current[side] === version) setPhotoErrors(previous=>({...previous,[side]:guestError(err)}));
     } finally {
       if (versions.current[side] === version) setProcessing(previous => ({ ...previous, [side]: false }));
     }
@@ -122,12 +157,12 @@ export default function GuestCheckinPage() {
     const {side,blob,file}=cropReview;
     requestManualDocumentReview(blob,{side,foreign:details.foreign_guest});
     setPhotos(previous=>({...previous,[side]:blob}));setOriginals(previous=>({...previous,[side]:file}));
-    setCropDraft(null);setCropReview(null);setError('');
+    setCropDraft(null);setCropReview(null);setPhotoErrors(previous=>({...previous,[side]:''}));
   }
 
   async function submit(event) {
     event.preventDefault();
-    setError('');
+    setError('');setPhotoErrors({});
     setTouched(Object.fromEntries(Object.keys(details).map(key => [key, true])));
     try {
       const invalid = guestFieldErrors(details, invitation?.linked ? invitation.arrival_date : propertyToday());
@@ -138,7 +173,10 @@ export default function GuestCheckinPage() {
       }
       const cleaned = validateGuestDetails(details, invitation?.linked ? invitation.arrival_date : propertyToday());
       if (cropDraft || processing.front || processing.back || identityPolicy(cleaned).required.some(side=>!photos[side])) {
-        throw new Error('Please choose the required document photos and wait for compression.');
+        const missing=Object.fromEntries(identityPolicy(cleaned).required.filter(side=>!photos[side]).map(side=>[side,'Choose this document photo before continuing.']));
+        setPhotoErrors(missing);
+        document.getElementById('checkin-identity-documents')?.scrollIntoView({block:'center',behavior:'smooth'});
+        return;
       }
       if (!reviewing) {
         setDetails({ ...cleaned, phone_country: details.phone_country }); setConfirmed(false); setReviewing(true);
@@ -148,8 +186,8 @@ export default function GuestCheckinPage() {
       if (busy) return;
       setBusy(true);
       const row = await submitGuestCheckin(invitation, cleaned, photos);
-      setInvitation(row); setPhotos({}); setOriginals({}); setReviewing(false);
-    } catch (err) { setError(guestError(err)); }
+      setSubmittedNow(true);setInvitation(row); setPhotos({}); setOriginals({}); setReviewing(false);
+    } catch (err) { if(err.photoSide)setPhotoErrors(previous=>({...previous,[err.photoSide]:guestError(err)}));else setError(guestError(err)); }
     finally { setBusy(false); }
   }
 
@@ -183,7 +221,7 @@ export default function GuestCheckinPage() {
           {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
 
           {!clientAvailable() ? <p className="text-sm text-slate-600">Guest check-in is not configured. Please contact reception.</p> :
-            completed ? <div role="status" className="rounded-lg bg-emerald-50 p-5 text-emerald-800"><CheckCircle2 className="mb-2" /><h2 className="font-semibold">Already uploaded</h2><p className="mt-1 text-sm">Your details and documents have been submitted. Contact reception if a correction is needed.</p></div> :
+            completed ? <div role="status" className="rounded-lg bg-emerald-50 p-5 text-emerald-800"><CheckCircle2 className="mb-2" /><h2 className="font-semibold">{staffSession?'Check-in completed':'Already completed'}</h2><p className="mt-1 text-sm">{staffSession?'Guest details and documents are saved. You can return to the guest list.':submittedNow?'Your details and documents were successfully submitted. Reception will verify them.':'This check-in was previously submitted. Contact reception if a correction is needed.'}</p>{staffSession&&<Button type="button" variant="secondary" className="mt-4 min-h-12" disabled={busy} onClick={nextGuest}>{busy?'Starting next check-in...':'Add another guest'}</Button>}</div> :
             !invitation ? <div role="status" className="text-sm text-slate-600">
               {busy ? 'Getting your check-in ready...' : 'Unable to open check-in. Please contact the manager.'}
             </div> :
@@ -192,7 +230,7 @@ export default function GuestCheckinPage() {
               <p className="text-sm text-slate-500">Check your details and make sure the uploaded photos are readable before submitting.</p>
               <dl className="grid gap-4 rounded-lg bg-slate-50 p-4 sm:grid-cols-2">
                 {[
-                  ['Full name', details.full_name], ['Email', details.email],
+                  ['Full name', details.full_name], ['Home address', details.address||'Not provided'], ['Gender', genderLabel(details.gender)], ['Email', details.email],
                   ['Phone number', details.phone], ['Date of arrival', details.arrival_date],
                   ['Departure date', details.departure_date], ['Coming from', details.coming_from],
                   ['Going to', details.going_to],
@@ -203,8 +241,8 @@ export default function GuestCheckinPage() {
                 </div>)}
               </dl>
               <div className="grid gap-4 sm:grid-cols-2">
-                <DocumentPreview blob={photos.front} label={details.foreign_guest ? 'Passport front' : 'ID front side'} />
-                {photos.back&&<DocumentPreview blob={photos.back} label={details.foreign_guest ? 'Visa' : 'ID back side'} />}
+                <div><DocumentPreview blob={photos.front} label={details.foreign_guest ? 'Passport front' : 'ID front side'} />{photoErrors.front&&<p role="alert" className="mt-2 text-sm text-red-600">{photoErrors.front}</p>}</div>
+                {photos.back&&<div><DocumentPreview blob={photos.back} label={details.foreign_guest ? 'Visa' : 'ID back side'} />{photoErrors.back&&<p role="alert" className="mt-2 text-sm text-red-600">{photoErrors.back}</p>}</div>}
               </div>
               {Object.values(photos).some(photo=>photoScreening(photo)?.manualReview)&&<p role="status" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Your documents need reception review. You can submit your details now; please bring the original ID to reception.</p>}
               <label className="flex items-start gap-2 text-sm text-slate-700">
@@ -223,6 +261,7 @@ export default function GuestCheckinPage() {
             <form onSubmit={submit} noValidate className="space-y-6">
               <fieldset disabled={busy} className="space-y-6">
 <section className="rounded-2xl border border-slate-200 p-4 sm:p-5"><h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-slate-900"><UserRound size={18} />Personal information</h2><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><Input className="min-h-12 min-w-0 !text-base sm:!text-sm" label="Full name" name="full_name" {...liveProps("full_name")} autoComplete="name" required maxLength={100} value={details.full_name} onChange={update} />
+<label className="text-sm font-medium text-slate-700">Gender<select name="gender" required value={details.gender} onChange={update} onBlur={()=>setTouched(previous=>({...previous,gender:true}))} aria-invalid={!!(touched.gender&&fieldErrors.gender)} aria-describedby={touched.gender&&fieldErrors.gender?'checkin-gender-error':undefined} className="mt-2 min-h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-slate-900"><option value="">Choose an option</option>{genderOptions.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select>{touched.gender&&fieldErrors.gender&&<span id="checkin-gender-error" className="mt-1 block text-xs text-red-600" role="alert">{fieldErrors.gender}</span>}</label>
 <PhoneInput country={details.phone_country} value={details.phone} error={touched.phone ? fieldErrors.phone : undefined}
                       onBlur={() => setTouched(previous => ({ ...previous, phone: true }))}
                       onChange={phone => setDetails(previous => ({ ...previous, phone }))}
@@ -231,6 +270,7 @@ export default function GuestCheckinPage() {
                         setTouched(previous => ({ ...previous, phone: false }));
                       }} />
 <Input className="min-h-12 min-w-0 !text-base sm:!text-sm" label="Email" name="email" {...liveProps("email")} type="email" autoComplete="email" required maxLength={254} value={details.email} onChange={update} /></div></section>
+<section className="rounded-2xl border border-slate-200 p-4 sm:p-5"><h2 className="mb-4 text-base font-semibold text-slate-900">Home address</h2><label className="block text-sm font-medium text-slate-700" htmlFor="checkin-home-address">Home address (optional)</label><textarea id="checkin-home-address" name="address" rows={3} autoComplete="street-address" maxLength={500} value={details.address} onChange={update} onBlur={()=>setTouched(previous=>({...previous,address:true}))} aria-invalid={!!(touched.address&&fieldErrors.address)} aria-describedby={'checkin-address-help'+(touched.address&&fieldErrors.address?' checkin-address-error':'')} className="checkin-address mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-base text-slate-900 sm:text-sm"/>{touched.address&&fieldErrors.address&&<p id="checkin-address-error" role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.address}</p>}<p id="checkin-address-help" className="mt-2 text-xs text-slate-500">Include street, city, state, postal code and country. Reception can use this for your bill; a different company billing address can be provided later.</p></section>
 <section className="rounded-2xl border border-slate-200 p-4 sm:p-5"><h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-slate-900"><CalendarDays size={18} />Stay dates</h2><div className="grid gap-4 sm:grid-cols-2"><Input className="min-h-12 min-w-0 !text-base sm:!text-sm" label="Date of arrival" name="arrival_date" {...liveProps("arrival_date")} type="date" readOnly={!!invitation?.linked} min={invitation?.linked?invitation.arrival_date:today} required value={details.arrival_date} onChange={update} />
 <Input className="min-h-12 min-w-0 !text-base sm:!text-sm" label="Departure date" name="departure_date" {...liveProps("departure_date")} type="date" readOnly={!!invitation?.linked} min={details.arrival_date && details.arrival_date > today ? details.arrival_date : today} required value={details.departure_date} onChange={update} /></div></section>
 <section className="rounded-2xl border border-slate-200 p-4 sm:p-5"><h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-slate-900"><MapPin size={18} />Travel information</h2><div className="mb-4 grid gap-4 sm:grid-cols-2"><Input className="min-h-12 min-w-0 !text-base sm:!text-sm" label="Coming from" name="coming_from" {...liveProps("coming_from")} required maxLength={150} value={details.coming_from} onChange={update} /><Input className="min-h-12 min-w-0 !text-base sm:!text-sm" label="Going to" name="going_to" {...liveProps("going_to")} required maxLength={150} value={details.going_to} onChange={update} /></div>
@@ -240,14 +280,14 @@ export default function GuestCheckinPage() {
                   setPhotos({}); setProcessing({}); setOriginals({}); setCropDraft(null);setCropReview(null);
                 }} />I am a foreign guest (passport and visa required)</label>
                 </section>
-                <section className="rounded-2xl border border-slate-200 p-4 sm:p-5">
+                <section id="checkin-identity-documents" className="rounded-2xl border border-slate-200 p-4 sm:p-5">
                   <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900"><FileCheck2 size={20} />Identity documents</h2>
                   <p className="mb-4 mt-1 text-sm text-slate-500">PAN cards are not accepted. A driving licence needs the front photo only; the back is optional. Other Indian IDs need front and back. Foreign guests need passport and visa. We look for the four corners and straighten the photo. If the automatic text check is uncertain, you can submit it for reception review.</p>
-                  {!details.foreign_guest&&<label className="mb-4 block text-sm font-medium text-slate-700">Identity document type<select name="document_type" className="mt-2 min-h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-slate-900" value={details.document_type} onChange={event=>{setDetails(previous=>({...previous,document_type:event.target.value}));versions.current.front++;versions.current.back++;setPhotos({});setOriginals({});setProcessing({});setCropDraft(null);setCropReview(null);setError('');}}>{identityTypes.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>}
+                  {!details.foreign_guest&&<label className="mb-4 block text-sm font-medium text-slate-700">Identity document type<select name="document_type" className="mt-2 min-h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-slate-900" value={details.document_type} onChange={event=>{setDetails(previous=>({...previous,document_type:event.target.value}));versions.current.front++;versions.current.back++;setPhotos({});setOriginals({});setProcessing({});setCropDraft(null);setCropReview(null);setError('');setPhotoErrors({});}}>{identityTypes.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>}
                   <div className="grid gap-4 sm:grid-cols-2">
                     {['front', 'back'].map(side => <PhotoUploadCard key={side} side={side}
                       label={details.foreign_guest ? (side === 'front' ? 'Passport front' : 'Visa') : (side === 'front' ? identityPolicy(details).label+' front' : identityPolicy(details).label+' back'+(details.document_type==='DRIVING_LICENSE'?' (optional)':''))}
-                      photo={photos[side]} screening={photoScreening(photos[side])} processing={processing[side]} disabled={busy || !!cropDraft || processing.front || processing.back}
+                      error={photoErrors[side]} photo={photos[side]} screening={photoScreening(photos[side])} processing={processing[side]} disabled={busy || !!cropDraft || processing.front || processing.back}
                       onChoose={choosePhoto} onCrop={side => {setCropReview(null);setCropDraft({ side, file: originals[side] });}} />)}
                   </div>
                 </section>
@@ -267,7 +307,7 @@ export default function GuestCheckinPage() {
       </div>
       {cropDraft && <ImageCropDialog key={cropDraft.side} file={cropDraft.file}
         label={details.foreign_guest ? (cropDraft.side === 'front' ? 'Passport front' : 'Visa') : (cropDraft.side === 'front' ? 'ID front side' : 'ID back side')}
-        busy={!!processing[cropDraft.side]} error={error} reviewRequired={!!cropReview} reviewPhoto={cropReview?.blob} onCropChange={()=>setCropReview(null)} onManualReview={acceptForReceptionReview} onApply={applyCrop} onCancel={() => {setCropDraft(null);setCropReview(null);}} />}
+        busy={!!processing[cropDraft.side]} error={photoErrors[cropDraft.side]} reviewRequired={!!cropReview} reviewPhoto={cropReview?.blob} onCropChange={()=>setCropReview(null)} onManualReview={acceptForReceptionReview} onApply={applyCrop} onCancel={() => {setCropDraft(null);setCropReview(null);}} />}
     </main>
   );
 }

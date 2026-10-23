@@ -20,7 +20,7 @@ test('group progress is scoped to one booking and counts each completed person',
  assert.deepEqual(checkinProgress(members,'missing'),{total:0,done:0});
 });
 test('linked bookings can validate booked arrival while public check-in rejects historical dates',()=>{
- const details={full_name:'Anand Guest',email:'guest@example.com',phone:'+919876543210',arrival_date:'2026-10-09',departure_date:'2026-10-12',coming_from:'Delhi',going_to:'Goa',foreign_guest:false};
+ const details={gender:'PREFER_NOT_TO_SAY',full_name:'Anand Guest',email:'guest@example.com',phone:'+919876543210',arrival_date:'2026-10-09',departure_date:'2026-10-12',coming_from:'Delhi',going_to:'Goa',foreign_guest:false};
  assert.throws(()=>validateGuestDetails(details,'2026-10-10'),/before today/);
  assert.equal(validateGuestDetails(details,details.arrival_date).arrival_date,'2026-10-09');
 });

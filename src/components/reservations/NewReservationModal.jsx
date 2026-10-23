@@ -1,3 +1,4 @@
+import {genderOptions} from '../../services/guestGender';
 import './maintenance-switch.css';
 import PhoneInput from '../../features/rooms/components/PhoneInput';
 import {phoneCountry} from '../../features/rooms/utils/phoneInput';
@@ -27,7 +28,7 @@ export default function NewReservationModal({ isOpen, onClose, units:initialUnit
     if (!isOpen) return;
     const arrival=defaultDate||today;
     const availableDefault=units.find(unit=>!destinationError(unit,{gender:'OTHER'},allocations,null,arrival,nextDay(arrival)));
-    setForm({ unitId: defaultUnitId || availableDefault?.id || '', guestName: '', phone: '', phoneCountry:'IN', webCheckinId:'', email: '', gender: 'OTHER', nationality: 'India',
+    setForm({ unitId: defaultUnitId || availableDefault?.id || '', guestName: '', phone: '', phoneCountry:'IN', webCheckinId:'', email: '', gender: 'NOT_PROVIDED', nationality: 'India',
       checkInDate: defaultDate || today, checkOutDate: nextDay(defaultDate || today), status: defaultBookingStatus(defaultDate || today,today), total: '0', paid: '0', source: 'Direct Booking', notes: '' });
     setManualStatus(false); setManualTotal(false); setMaintenance(false); setReason('maintenance'); setError('');
   }, [isOpen, defaultUnitId, defaultDate]);
@@ -53,9 +54,9 @@ export default function NewReservationModal({ isOpen, onClose, units:initialUnit
   },[units.map(u=>u.id).join(','),form.unitId]);
   function selectWalkin(id) {
     const w=walkins.find(w=>w.id===id),d=w?.details;
-    if(!d){setForm(previous=>({...previous,webCheckinId:'',guestName:'',phone:'',phoneCountry:'IN',email:''}));return;}
+    if(!d){setForm(previous=>({...previous,webCheckinId:'',guestName:'',phone:'',phoneCountry:'IN',email:'',gender:'NOT_PROVIDED'}));return;}
     setManualStatus(false);setManualTotal(false);
-    setForm(previous=>({...previous,webCheckinId:id,guestName:d.full_name,phone:d.phone,phoneCountry:phoneCountry(d.phone),email:d.email,
+    setForm(previous=>({...previous,webCheckinId:id,guestName:d.full_name,phone:d.phone,phoneCountry:phoneCountry(d.phone),email:d.email,gender:d.gender||'NOT_PROVIDED',
       nationality:d.foreign_guest?'International':'India',checkInDate:d.arrival_date,checkOutDate:d.departure_date,
       status:defaultBookingStatus(d.arrival_date,today)}));
   }
@@ -109,7 +110,7 @@ export default function NewReservationModal({ isOpen, onClose, units:initialUnit
         <PhoneInput required country={form.phoneCountry||'IN'} value={form.phone||''} onChange={value=>change('phone',value)} onCountryChange={(country,national)=>setForm(previous=>({...previous,phoneCountry:country,phone:'+'+getCountryCallingCode(country)+national}))}/>
 
         {input('email', 'Email (optional)', 'email', { maxLength: 254 })}
-        <div className="grid grid-cols-2 gap-3"><label className="text-sm">Gender<select value={form.gender || 'OTHER'} onChange={e => change('gender', e.target.value)} className="mt-1 w-full rounded-lg border p-3"><option value="OTHER">Other / unspecified</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>{input('nationality', 'Nationality', 'text', { maxLength: 100 })}</div>
+        <div className="grid grid-cols-2 gap-3"><label className="text-sm">Gender<select value={form.gender || 'NOT_PROVIDED'} onChange={e => change('gender', e.target.value)} className="mt-1 w-full rounded-lg border p-3"><option value="NOT_PROVIDED">Not provided</option>{form.gender==='OTHER'&&<option value="OTHER">Other / unspecified (legacy)</option>}{genderOptions.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>{input('nationality', 'Nationality', 'text', { maxLength: 100 })}</div>
         <label className="block text-sm">Status<select aria-label="Status" value={form.status || 'PENDING'} onChange={e => change('status', e.target.value)} className="mt-1 w-full rounded-lg border p-3"><option value="PENDING">Reserved / awaiting arrival</option><option value="CHECKED_IN" disabled={!form.checkInDate || form.checkInDate > today || form.checkOutDate <= today}>Walk-in / checked in</option></select></label>
         <div className="grid grid-cols-2 gap-3">{input('total', 'Total (₹)', 'number', { required: true, min: 0, step: '0.01' })}{input('paid', 'Paid (₹)', 'number', { required: true, min: 0, max: form.total, step: '0.01' })}</div>
         <p className="text-xs text-slate-500">Saved nightly rate: {money(selectedUnit?.nightlyRatePaise)}. {manualTotal ? 'Custom total entered.' : 'Total calculated from the saved rate.'} <button type="button" className="font-semibold text-blue-600 underline" onClick={() => setManualTotal(false)}>Use saved rate</button></p>

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { validateGuestDetails, guestFieldErrors, propertyToday } from '../src/features/rooms/utils/guestCheckinValidation.js';
 
 const valid = {
-  full_name: ' Guest Name ', email: ' guest@example.com ', phone: '+91 98765 43210',
+  full_name: ' Guest Name ', gender:'PREFER_NOT_TO_SAY', email: ' guest@example.com ', phone: '+91 98765 43210',
   arrival_date: '2026-10-09', departure_date: '2026-10-10',
   coming_from: ' Bengaluru ', going_to: ' Kochi ', foreign_guest: false,
 };
@@ -64,4 +64,15 @@ test('normalizes E.164 payload and revalidates country changes', () => {
   assert.equal(validateGuestDetails({ ...valid, phone: '9876543210', phone_country: 'IN' }, '2026-10-09').phone, '+919876543210');
   assert.ok(guestFieldErrors({ ...valid, phone: '+919876543210', phone_country: 'US' }, '2026-10-09').phone);
   assert.equal(validateGuestDetails({ ...valid, email: 'Guest@EXAMPLE.COM' }, '2026-10-09').email, 'Guest@example.com');
+});
+
+test('gender requires an explicit valid choice and permits declining to share',()=>{
+ for(const gender of ['MALE','FEMALE','NON_BINARY','PREFER_NOT_TO_SAY'])assert.equal(validateGuestDetails({...valid,gender},'2026-10-09').gender,gender);
+ for(const gender of ['',undefined,'OTHER','NOT_PROVIDED','invalid'])assert.throws(()=>validateGuestDetails({...valid,gender},'2026-10-09'),/gender/);
+});
+
+test('optional home address is trimmed, bounded and preserved without changing legacy submissions',()=>{
+ assert.equal(validateGuestDetails(valid,'2026-10-09').address,'');
+ assert.equal(validateGuestDetails({...valid,address:'  10 Market Road, Kochi, India  '},'2026-10-09').address,'10 Market Road, Kochi, India');
+ for(const address of ['abcd','x'.repeat(501),'<script>address</script>','Address\u0000text'])assert.ok(guestFieldErrors({...valid,address},'2026-10-09').address);
 });

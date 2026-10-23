@@ -48,6 +48,19 @@ export async function openPublicCheckin(propertyId) {
   return data;
 }
 
+let nextGuestPromise;
+export function startNextPublicCheckin(propertyId){
+  // Rotate only the isolated guest session. Staff authentication is untouched.
+  // Never reuse or overwrite the completed invitation and its documents.
+  if(!propertyId)return Promise.reject(new Error('Scan the property QR code to start another check-in.'));
+  if(!nextGuestPromise)nextGuestPromise=(async()=>{
+    const {error}=await client().auth.signOut({scope:'local'});
+    if(error)throw error;
+    return openPublicCheckin(propertyId);
+  })().finally(()=>{nextGuestPromise=null;});
+  return nextGuestPromise;
+}
+
 export function client() {
   if (!guestClient) throw new Error('Guest check-in is not configured. Please contact reception.');
   return guestClient;
@@ -68,16 +81,16 @@ export async function submitGuestCheckin(invitation, details, photos) {
   // Validate all required and supplied slots before any network writes.
   for (const side of sides) {
     if (!photos[side] || photos[side].type !== 'image/jpeg' || photos[side].size > 1024 * 1024 || photos[side].size === 0) {
-      throw new Error('Please choose the required compressed document photos (maximum 1 MB each).');
+      throw Object.assign(new Error('Please choose the required compressed document photos (maximum 1 MB each).'),{photoSide:side});
     }
   }
   cleaned.document_sides=sides;
   cleaned.document_screening={};
   for (const side of sides) {
-    if (!photos[side]) throw new Error('Please choose the required document photos.');
-    const screening=await screenIdentityPhoto(photos[side],{side,foreign:cleaned.foreign_guest});
-    if(screening.reason==='pan-not-accepted')throw new Error('PAN cards are not accepted. Upload another identity document.');
-    if(!screening.accepted&&!screening.manualReview)throw new Error('Review the cropped photo or choose reception review before submitting.');
+    if (!photos[side]) throw Object.assign(new Error('Please choose the required document photos.'),{photoSide:side});
+    const screening=await screenIdentityPhoto(photos[side],{side,foreign:cleaned.foreign_guest}).catch(error=>{throw Object.assign(new Error(error.message),{photoSide:side});});
+    if(screening.reason==='pan-not-accepted')throw Object.assign(new Error('PAN cards are not accepted. Upload another identity document.'),{photoSide:side});
+    if(!screening.accepted&&!screening.manualReview)throw Object.assign(new Error('Review the cropped photo or choose reception review before submitting.'),{photoSide:side});
     cleaned.document_screening={...cleaned.document_screening,[side]:screening.manualReview?'manual-review':'document-like'};
   }
   for (const side of sides) {
@@ -85,7 +98,7 @@ export async function submitGuestCheckin(invitation, details, photos) {
       .upload(`${invitation.id}/${side}.jpg`, photos[side], {
         upsert: true, contentType: 'image/jpeg', cacheControl: '0',
       });
-    if (error) throw error;
+    if (error) throw Object.assign(new Error(error.message),error,{photoSide:side});
   }
   const { data, error } = await client().rpc('complete_guest_checkin', {
     invitation_id: invitation.id, guest_details: cleaned,

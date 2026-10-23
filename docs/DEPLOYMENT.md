@@ -1,4 +1,69 @@
+## Staff recognition on private check-in links (037)
+
+Apply `supabase/migrations/202610230037_checkin_property_context.sql` then update the frontend. The public property profile now includes the resolved property ID, allowing the separate Stayman login to verify staff assignment even when a private link has no property parameter. Stored sessions that omit is_anonymous are no longer rejected before the server membership check. Anonymous or unassigned sessions still do not get Add another guest. No Edge Function deployment.
+
+## Shared-browser public check-in
+
+Frontend-only update: guests see Already completed after submission and cannot start another guest from that completion screen. Verified property staff see an explicit Add another guest button. No automatic reset is performed. The button rotates only the isolated guest session and opens a fresh public check-in for the same property; staff login and completed submissions are preserved. From a completed private invitation, it switches to the property's public check-in without overwriting the original invitation. No QR rescan, SQL or Edge Function changes are needed.
+
+## Web check-in feedback
+
+Frontend-only update: photo preparation/crop/storage failures are shown beside the affected document, including on the review screen. First successful completion says Successfully submitted. Previously completed guest links say Already submitted; a separate signed-in application session uses Check-in completed. Guest and application sessions remain separate; these messages do not grant access or allow completed submissions to be overwritten. No SQL or Edge Function deployment is needed.
+
+## Guest home address and invoice prefill (036)
+
+Apply `supabase/migrations/202610230036_guest_address.sql` after 035, then deploy the frontend. No Edge Function deployment or new secrets. Web check-in collects an optional home address (5?500 characters when provided), includes it in the review screen and keeps it in that individual's submission. Old submissions remain valid.
+
+Invoice preparation/checkout use the latest completed submission explicitly linked to the booking contact for this reservation. Unlinked or other group members are excluded. Existing saved billing addresses take precedence, including a deliberately blank value; company billing addresses remain editable. Issued invoice snapshots are unchanged. No address is added to public property responses or guest-list summary rows.
+
+## Invoice popup on the current page
+
+Frontend-only update: guest register, reservation details and invoice preparation buttons open checkout/finalisation over the existing page. Once eligible, the same popup shows the saved invoice in an embedded print view. Closing returns to the unchanged underlying page; no separate blank tab is opened. Customer-address collection in web check-in is unchanged.
+
+## Invoice dialog styling and setup state
+
+Frontend-only update: the standalone invoice route now imports its form/button styles directly. Closing the checkout dialog leaves a visible booking/status card. Printing waits for the invoice document to render. A paid, checked-out booking still requires configured property billing details (Platform admin ? select property ? Billing). Confirm actual GST registration status rather than assuming it; issued invoices retain their saved snapshots. No additional SQL or Edge Function deployment is needed for these UI changes.
+
+## Older folio payment schema (035)
+
+For `column accommodation_applied does not exist`, run `supabase/migrations/202610230035_folio_payment_schema.sql` in Supabase SQL Editor. It safely adds the column when the older payment table is empty, or does nothing when the column already exists. If existing receipts lack this allocation field, it stops without changing data: reconcile their accommodation portion before continuing to avoid double-counting payments. Do not rerun the original table-creation migration or delete payments.
+
+## Invoice permissions repair (034)
+
+If invoice loading reports `permission denied for function stayman_invoice_context`, apply `supabase/migrations/202610230034_invoice_permissions.sql` after 033 in Supabase SQL Editor. This restores authenticated RPC execution; anonymous access stays blocked and property authorization remains enforced inside the functions. No Edge Function deployment is needed. If the authenticated grant is already present, sign out and back in on the same origin as the invoice tab (localhost and production have separate sessions).
+
+## Checkout and invoice printing (033)
+
+Apply `supabase/migrations/202610230033_checkout_invoices.sql` after 032, then deploy the frontend. No Edge Function deployment or new secrets are needed.
+
+Administrator approval is removed. Invoice printing requires the whole booking to be checked out and the complete folio balance to be zero. Billing configuration and GST customer address checks remain. Save billing details and record any extra/tax payments in Invoice preparation. Existing REVIEW drafts become editable drafts; issued invoices keep their numbers and snapshots.
+
+Use **Check out / print invoice** in the reservation, or Print/Download in the guest register. Select departing group members, leaving extended members unchecked. This records partial departure, but does not release individual rooms: the current model has no guest-to-allocation association. Review/adjust room allocations separately; the common invoice remains open until everyone leaves. Checkout retains charges and booked history, releases remaining inventory only on full checkout, and never applies an automatic refund. Use separate bookings when individual invoices are needed.
+
 # Stayman deployment instructions
+
+Guest table/filter layout adjustments after 032 require only a frontend deployment.
+The table retains gender and the normal guest columns; expand a row for booking
+totals, assignments and ID/invoice actions. **Download invoice** uses the existing
+invoice print layout: select **Save as PDF** in the browser print window. Drafts
+stay clearly marked and are not issued automatically.
+
+## Guest gender and compact register (032)
+
+Run `supabase/migrations/202610230032_guest_gender.sql` after 031 in Supabase SQL
+Editor, then deploy the frontend. No Edge Function deployment or new secret is
+needed. New web check-ins require a gender choice, including Prefer not to say.
+Refresh older open web-check-in tabs after deploying the new client.
+
+Existing completed submissions are preserved. Their missing answers are not
+guessed or relabelled as a decision not to share. Explicitly linked guest records
+receive the latest completed answer for that person; group members never overwrite
+the booking contact merely because they share a reservation. Dorm allocation
+restrictions remain enforced; check-in completion does not move an existing allocation.
+
+Verify a new walk-in, a linked group member, and the guest register on mobile.
+Guest rows expand to show gender, contact/travel details, View / ID and invoice
+actions. Filters and pagination still operate server-side.
 
 ## Expense reports update (031)
 

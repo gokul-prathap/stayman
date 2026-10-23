@@ -1,0 +1,110 @@
+// Actual PostgreSQL/PLpgSQL in WASM; synthetic users/data only, no Supabase connection.
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {randomUUID} from 'node:crypto';
+import {PGlite} from '@electric-sql/pglite';
+import {calculateLine,chargeTypes,emptyTax} from '../src/features/billing/billingMath.js';
+const database=new PGlite();
+const id=()=>randomUUID(),admin=id(),staff=id(),outsider=id(),property=id(),otherProperty=id(),reservation=id(),otherReservation=id(),revisedReservation=id(),guest=id();
+let checks=0;
+async function check(name,action){await action();checks++;console.log('PASS '+name);}
+const rpc=async(name,args=[])=>{
+ const result=await database.query(`select public.${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args);
+ return result.rows[0].result;
+};
+async function session(user,otp=true){
+ await database.exec('reset role');await database.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({sub:user,is_anonymous:false,amr:[{method:otp?'otp':'password'}]})]);await database.exec('set role authenticated');
+}
+try{
+ await database.exec(`
+ create role anon;create role authenticated;create schema auth;
+ create table auth.users(id uuid primary key);
+ create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb$$;
+ create function auth.uid() returns uuid language sql stable as $$select (auth.jwt()->>'sub')::uuid$$;
+ grant usage on schema auth to authenticated,anon;
+ create table public.stayman_properties(id uuid primary key,name text,address text,phone text,timezone text default 'Asia/Kolkata',logo_path text);
+ create table public.stayman_staff(property_id uuid,user_id uuid);
+ create table public.stayman_platform_admins(user_id uuid);
+ create function public.stayman_is_staff(p_property uuid) returns boolean language sql security definer set search_path='' as $$select exists(select 1 from public.stayman_staff where property_id=p_property and user_id=auth.uid())$$;
+ create function public.stayman_is_platform_admin() returns boolean language sql security definer set search_path='' as $$select exists(select 1 from public.stayman_platform_admins where user_id=auth.uid()) and exists(select 1 from jsonb_array_elements(auth.jwt()->'amr') entry where entry->>'method'='otp')$$;
+ create table public.stayman_guests(id uuid primary key,property_id uuid,full_name text,phone text,email text);
+ create table public.stayman_reservations(id uuid primary key,property_id uuid,guest_id uuid,booking_ref text,total_amount bigint,paid_amount bigint,check_in_date date,check_out_date date,status text,unique(id,property_id));
+ create table public.stayman_units(id uuid primary key,property_id uuid,room_name text,label text);
+ create table public.stayman_allocations(id uuid primary key,property_id uuid,reservation_id uuid,unit_id uuid,check_in_date date,check_out_date date);
+ create table public.stayman_payments(id uuid primary key default gen_random_uuid(),property_id uuid,reservation_id uuid,amount_paise bigint,method text,note text,kind text default 'RECEIPT',paid_at timestamptz default now(),request_id uuid unique);
+ create function public.stayman_record_payment(p_reservation uuid,p_amount bigint,p_method text,p_note text,p_request uuid) returns uuid language plpgsql security definer set search_path='' as $$
+ declare r public.stayman_reservations; result uuid;
+ begin
+ select * into r from public.stayman_reservations where id=p_reservation for update;
+ if not public.stayman_is_staff(r.property_id) then raise exception 'Staff access required.';end if;
+ select id into result from public.stayman_payments where request_id=p_request;
+ if found then return result;end if;
+ if p_amount is null or p_amount<=0 or p_amount>r.total_amount-r.paid_amount then raise exception 'Invalid accommodation payment.';end if;
+ insert into public.stayman_payments(property_id,reservation_id,amount_paise,method,note,request_id) values(r.property_id,r.id,p_amount,p_method,p_note,p_request) returning id into result;
+ update public.stayman_reservations set paid_amount=paid_amount+p_amount where id=r.id;return result;
+ end $$;
+ `);
+ for(const user of [admin,staff,outsider])await database.query('insert into auth.users values($1)',[user]);
+ await database.query('insert into stayman_properties(id,name,address,phone) values($1,$2,$3,$4),($5,$6,$3,$4)',[property,'Sample Stay','Sample Address','1234567890',otherProperty,'Other Stay']);
+ await database.query('insert into stayman_staff values($1,$2)',[property,staff]);await database.query('insert into stayman_platform_admins values($1)',[admin]);
+ await database.query('insert into stayman_guests values($1,$2,$3,$4,$5)',[guest,property,'SAMPLE PERSON','1234567890','sample@example.invalid']);
+ for(const [rid,pid] of [[reservation,property],[otherReservation,otherProperty],[revisedReservation,property]])await database.query("insert into stayman_reservations values($1,$2,$3,'SAMPLE-BOOKING',74900,0,'2026-10-18','2026-10-19','CHECKED_IN')",[rid,pid,guest]);
+ await database.exec(await readFile(new URL('../supabase/migrations/202610190018_billing_drafts.sql',import.meta.url),'utf8'));
+ const repair=await readFile(new URL('../supabase/migrations/202610230035_folio_payment_schema.sql',import.meta.url),'utf8');
+ await database.exec('alter table stayman_folio_payments drop column accommodation_applied cascade');
+ await database.exec(repair);await database.exec(repair);
+ await database.exec(`create table public.stayman_booking_members(id uuid primary key,property_id uuid,reservation_id uuid,display_name text,guest_id uuid,invitation_id uuid,created_at timestamptz default now());`);
+ const migration=await readFile(new URL('../supabase/migrations/202610230033_checkout_invoices.sql',import.meta.url),'utf8');
+ await database.exec(migration);await database.exec(migration);
+ await database.exec('create table guest_checkin_invitations(id uuid primary key,property_id uuid,status text,details jsonb,completed_at timestamptz)');
+ const addressMigration=await readFile(new URL('../supabase/migrations/202610230036_guest_address.sql',import.meta.url),'utf8');
+ await database.exec(addressMigration);await database.exec(addressMigration);
+ await session(staff);
+ const fid=await rpc('stayman_prepare_folio',[reservation,{name:'SAMPLE PERSON',address:'Sample address',gstin:''}]);
+ assert.equal((await rpc('stayman_folio_preview',[reservation])).status,'DRAFT');
+ await assert.rejects(rpc('stayman_issue_folio',[fid,await rpc('stayman_folio_preview',[reservation])]),/Check out/);
+ await database.exec('reset role');
+ const m1=id(),m2=id(),unit=id();
+ await database.query("insert into stayman_units values($1,$2,'Private','101')",[unit,property]);
+ await database.query("insert into stayman_allocations values($1,$2,$3,$4,current_date-1,current_date+2)",[id(),property,reservation,unit]);
+ await database.query('insert into stayman_booking_members(id,property_id,reservation_id,display_name) values($1,$2,$3,$5),($4,$2,$3,$6)',[m1,property,reservation,m2,'Departing','Extended']);
+ const invitation=id();
+ await database.query("insert into guest_checkin_invitations values($1,$2,'completed',$3,now())",[invitation,property,{address:'10 Market Road, Kochi, India'}]);
+ await database.query('update stayman_booking_members set invitation_id=$1 where id=$2',[invitation,m1]);
+ await session(staff);
+ assert.equal((await rpc('stayman_invoice_context',[reservation])).guest_address,null,'unlinked member address must not be used for booking contact');
+ await database.exec('reset role');
+ await database.query('update stayman_booking_members set guest_id=$1 where id=$2',[guest,m1]);
+ await session(staff);
+ assert.equal((await rpc('stayman_invoice_context',[reservation])).guest_address,'10 Market Road, Kochi, India');
+ await rpc('stayman_checkout_guests',[reservation,[m1],false]);
+ let context=await rpc('stayman_invoice_context',[reservation]);
+ assert.equal(context.checkout_status,'CHECKED_IN');assert.ok(context.members.find(m=>m.id===m1).checked_out_at);assert.equal(context.members.find(m=>m.id===m2).checked_out_at,null);
+ await assert.rejects(rpc('stayman_issue_folio',[fid,await rpc('stayman_folio_preview',[reservation])]),/Check out/);
+ await assert.rejects(rpc('stayman_checkout_guests',[reservation,[id()],false]),/does not belong/);
+ await rpc('stayman_checkout_guests',[reservation,[m2],false]);
+ const completed=await rpc('stayman_invoice_context',[reservation]);
+ assert.equal(completed.checkout_status,'CHECKED_OUT');assert.equal(completed.rooms[0].unit,'101');
+ await database.exec('reset role');
+ const allocation=await database.query('select check_out_date=current_date released from stayman_allocations where reservation_id=$1',[reservation]);
+ assert.equal(allocation.rows[0].released,true);
+ await session(staff);
+ await assert.rejects(rpc('stayman_issue_folio',[fid,await rpc('stayman_folio_preview',[reservation])]),/configuration/);
+ await database.exec('reset role');
+ await database.query(`insert into stayman_billing_profiles(property_id,settings) values($1,'{"registration":"UNREGISTERED","invoice_prefix":"INV","price_mode":"INCLUSIVE","catalog":{}}')`,[property]);
+ await session(staff);
+ await assert.rejects(rpc('stayman_issue_folio',[fid,await rpc('stayman_folio_preview',[reservation])]),/Settle/);
+ await rpc('stayman_add_folio_charge',[reservation,'TOWEL','Towel',1,1000,'',id()]);
+ await rpc('stayman_record_folio_payment',[fid,75900,'CASH','Full bill',id()]);
+ const expected=await rpc('stayman_folio_preview',[reservation]);
+ assert.equal(expected.balance,0);
+ await assert.rejects(rpc('stayman_issue_folio',[fid,{...expected,total:1}]),/changed/);
+ const number=await rpc('stayman_issue_folio',[fid,expected]);
+ assert.equal(await rpc('stayman_issue_folio',[fid,expected]),number);
+ await rpc('stayman_checkout_guests',[reservation,[],true]);
+ assert.equal((await rpc('stayman_invoice_context',[reservation])).status,'ISSUED');
+ await session(outsider);
+ await assert.rejects(rpc('stayman_checkout_guests',[reservation,[],true]),/access/);
+ await assert.rejects(rpc('stayman_issue_folio',[fid,expected]),/access/);
+ console.log('PASS checkout invoices: rerun, staff issue, group partial departure, unpaid/extras, stale snapshot, idempotency and access checks');
+}finally{await database.close();}
