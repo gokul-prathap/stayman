@@ -19,8 +19,8 @@ export function percentChange(current,previous){return previous>0?(current-previ
 const inside=(day,from,to)=>day>=from&&day<=to;
 export function summarizeFinance(data,from,to){
  const days=(data?.days||[]).filter(d=>inside(d.day,from,to));
- const sums=Object.fromEntries(['revenue','cost','paid','receipts','occupied','propertyOut'].map(key=>[key,days.reduce((s,d)=>s+Number(d[key]||0),0)]));
- return {...sums,result:sums.revenue-sums.cost,cash:sums.receipts-sums.paid,propertyCash:sums.receipts-sums.propertyOut,days};
+ const sums=Object.fromEntries(['revenue','feeRevenue','cost','paid','receipts','occupied','propertyOut'].map(key=>[key,days.reduce((s,d)=>s+Number(d[key]||0),0)]));
+ return {...sums,result:sums.revenue+sums.feeRevenue-sums.cost,cash:sums.receipts-sums.paid,propertyCash:sums.receipts-sums.propertyOut,days};
 }
 export function categoryTotals(data,from,to,category){
  const rows=(data?.categories||[]).filter(r=>r.cost_kind==='OPERATING'&&(!category||r.category===category)&&inside(r.day,from,to));
@@ -50,7 +50,7 @@ export function downloadCsv(name,rows){
 export function financeCsv(data,from,to,propertyName){
  const s=summarizeFinance(data,from,to),prev=comparisonPeriod(from,to);
  const rows=[['Income & expenses',propertyName],['Period',from,to],['Amounts in INR; based on recorded bills, not complete accounting profit'],
-  ['Measure','INR'],...Object.entries({'Stay revenue':s.revenue,'Operating expenses':s.cost,'Operating result':s.result,'Net guest receipts':s.receipts,'Operating expenses paid':s.paid,'Net operating cash movement':s.cash,'Net property cash movement':s.propertyCash,'Outstanding bills at period end':data.outstanding,'Staff reimbursements outstanding':data.staffOwed}).map(([label,value])=>[label,Number(value||0)/100]),
+  ['Measure','INR'],...Object.entries({'Stay revenue':s.revenue,'Cancellation/no-show fees':s.feeRevenue,'Closure fees outstanding now':data.closureOutstandingNow,'Closure refunds due now':data.closureRefundDueNow,'Operating expenses':s.cost,'Operating result':s.result,'Net guest receipts':s.receipts,'Operating expenses paid':s.paid,'Net operating cash movement':s.cash,'Net property cash movement':s.propertyCash,'Outstanding bills at period end':data.outstanding,'Staff reimbursements outstanding':data.staffOwed}).map(([label,value])=>[label,Number(value||0)/100]),
   [],['Category','Current INR','Previous INR','Previous from','Previous to']];
  for(const category of [...new Set((data.categories||[]).filter(r=>r.cost_kind==='OPERATING').map(r=>r.category))]) rows.push([categoryLabel(category),categoryTotals(data,from,to,category).amount/100,categoryTotals(data,prev.from,prev.to,category).amount/100,prev.from,prev.to]);
  for(const category of ['ELECTRICITY','LAUNDRY']){
@@ -59,7 +59,7 @@ export function financeCsv(data,from,to,propertyName){
   if(category==='ELECTRICITY') rows.push(['kWh (recorded)',c.kwh,p.kwh],['Bills missing kWh',c.missingUnits,p.missingUnits],['kWh per billed day',c.kwhPerDay??'',p.kwhPerDay??'']);
   else rows.push(['Pieces',c.pieces,p.pieces],['Cost per piece INR',c.pieces?c.piecesCost/c.pieces/100:'',p.pieces?p.piecesCost/p.pieces/100:''],['Kilograms',c.kg,p.kg],['Cost per kg INR',c.kg?c.kgCost/c.kg/100:'',p.kg?p.kgCost/p.kg/100:'']);
  }
- rows.push([],['Date','Stay revenue INR','Operating cost INR','Operating result INR','Net guest receipts INR','Operating expenses paid INR','Occupied unit nights']);
- s.days.forEach(d=>rows.push([d.day,Number(d.revenue)/100,Number(d.cost)/100,(Number(d.revenue)-Number(d.cost))/100,Number(d.receipts)/100,Number(d.paid)/100,d.occupied]));
+ rows.push([],['Date','Stay revenue INR','Cancellation/no-show fees INR','Operating cost INR','Operating result INR','Net guest receipts INR','Operating expenses paid INR','Occupied unit nights']);
+ s.days.forEach(d=>rows.push([d.day,Number(d.revenue)/100,Number(d.feeRevenue||0)/100,Number(d.cost)/100,(Number(d.revenue)+Number(d.feeRevenue||0)-Number(d.cost))/100,Number(d.receipts)/100,Number(d.paid)/100,d.occupied]));
  return rows;
 }

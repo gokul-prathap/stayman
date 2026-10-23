@@ -58,7 +58,7 @@ test('missing sandbox channels keeps inventory/rates successful and persists res
   let finish; const calls = []; let configured = [];
   const job = {property: 'test', hotelCode: 'sandbox-pms', lease: 'lease', revision: 7, mappings: [{roomCode:'suite',unitIds:['synthetic-one'],rateplanCode:'suite-ep',ratePaise:120000,minimumStay:1}], updates: [{startDate:'2027-01-01',endDate:'2027-01-01',rooms:[{roomCode:'suite',available:1}]}]};
   const client = {from: () => ({select: () => ({eq: () => ({single: async () => ({data: {restriction_channels: configured}})})})}),
-    rpc: async (name, args) => {if (name === 'stayman_aiosell_claim') return {data: job}; finish = args; return {};}};
+    rpc: async (name, args) => {if (name === 'stayman_aiosell_claim') return {data: job}; if(name==='stayman_no_show_claim')return {data:null}; finish = args; return {};}};
   const handler = await load('aiosell-sync', {AIOSELL_WORKER_SECRET: 'test-worker'}, () => client, async (path, body) => {
     calls.push({path, body}); return body ? {success: true} : {connected_channels: [{operation: null, partner_id: 'unrelated'}, {operation: 'reservation', partner_id: 'sample-ota'}]};
   });
@@ -78,4 +78,22 @@ test('missing sandbox channels keeps inventory/rates successful and persists res
   assert.equal(conflictData.results.inventory.status,'sent'); assert.equal(conflictData.results.rates.status,'failed');
   assert.match(conflictData.results.rates.message,/different prices/);
   assert.ok(!calls.some(call=>call.path.includes('update-rates')));
+});
+
+test('no-show handler sends documented payload and requires owner/provider verification for retries',async()=>{
+ let owner=true,needsVerification=false,finished,calls=[];
+ const task={reservation:'r',property:'p',hotelCode:'sandbox-pms',bookingId:'OTA-123',channel:'booking.com',lease:'lease'};
+ const client={auth:{getUser:async()=>({data:{user:{id:'u'}}})},rpc:async(name,args)=>{
+  if(name==='stayman_is_owner')return {data:owner};
+  if(name==='stayman_no_show_sync_state')return {data:{can_send:true,needs_verification:needsVerification}};
+  if(name==='stayman_no_show_claim')return {data:task};
+  if(name==='stayman_no_show_finish'){finished=args;return {};}
+ }};
+ const handler=await load('aiosell-sync',{AIOSELL_ALLOWED_ORIGINS:'https://stayman.invalid',AIOSELL_PARTNER_ID:'pms-slug'},()=>client,async(path,body)=>{calls.push({path,body});return {success:true};});
+ let response=await handler(request({action:'noshow',property:'p',reservation:'r'},'Bearer user','https://stayman.invalid'));
+ assert.equal(response.status,200);assert.equal(calls[0].path,'/marknoshow/pms-slug');assert.deepEqual(calls[0].body,{hotelCode:'sandbox-pms',bookingId:'OTA-123',channel:'booking.com'});assert.equal(finished.p_error,null);
+ needsVerification=true;response=await handler(request({action:'noshow',property:'p',reservation:'r'},'Bearer user','https://stayman.invalid'));assert.equal(response.status,409);assert.equal(calls.length,1);
+ owner=false;response=await handler(request({action:'noshow',property:'p',reservation:'r',verified:true},'Bearer user','https://stayman.invalid'));assert.equal(response.status,403);
+ owner=true;const failing=await load('aiosell-sync',{AIOSELL_ALLOWED_ORIGINS:'https://stayman.invalid'},()=>client,async()=>{throw new Error('Timeout');});
+ response=await failing(request({action:'noshow',property:'p',reservation:'r',verified:true},'Bearer user','https://stayman.invalid'));assert.equal(response.status,409);assert.equal(finished.p_error,'Timeout');assert.match((await response.json()).message,/provider/);
 });

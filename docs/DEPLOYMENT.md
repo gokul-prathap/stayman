@@ -1,3 +1,22 @@
+## Guest review, policies and no-show update (039-043)
+
+1. Apply existing migrations through 038 first. Resolve migration 035's payment-allocation guard if it reports existing receipts needing reconciliation.
+2. In Supabase SQL Editor, run `scripts/admin/apply-guest-operations-update.sql`. This contains migrations 039-043 in order. Alternatively apply those five migration files individually.
+3. From the project folder, redeploy the updated worker: `npx supabase@latest functions deploy aiosell-sync --project-ref lyyjidxpskfcuksfhjpy --no-verify-jwt --use-api`. No new secrets or scheduler setup are required.
+4. Build and deploy the frontend through the existing hosting workflow.
+5. As owner, open Settings and save the cancellation/no-show policy. New direct bookings capture that version; older bookings and OTA bookings require owner review of the applicable terms.
+6. Test with a test booking: review a no-show, confirm nobody arrived, inspect fee/refund due, and record only payments or refunds actually made. Verify released availability in Aiosell and the separate no-show delivery status.
+
+Dashboard review cards start collapsed below the summary cards. Owners can correct personal details with a reason and visible edit history. Original ID submissions and issued invoices remain unchanged. Historical arrival/stay corrections require an owner reason and existing conflict-free allocations. Paying does not automatically check anyone out.
+
+Whole-booking no-show requires confirmation that nobody arrived. Partial group no-shows remain unavailable until individual guests can be linked reliably to room/bed allocations. Uncertain Aiosell delivery requires provider verification before retrying; unsupported channels require manual confirmation. OTA commission and payout calculations are deferred in `docs/future-changes.md`.
+
+## Overdue departures and missed check-in review (038)
+
+Apply `supabase/migrations/202610230038_overdue_departures.sql` after 037, then deploy the frontend. No scheduler or Edge Function deployment is needed. The dashboard uses the existing shared notification request for two cards: web check-in tasks, and overdue departures with missed arrivals/past-date submissions. Lists are capped at 100 per group and show full counts.
+
+Overdue is a read-only flag for CHECKED_IN bookings whose departure date plus the property's checkout time has passed, evaluated in its timezone. Extensions with a future departure are excluded. PENDING bookings with completed web check-in and past checkout time are shown for review, as are expired unallocated public submissions. No reservation status, payment or room availability is changed automatically. Full payment never proves arrival/departure. Cancel/no-show reviews must retain the existing refund/accounting process. Groups remain booking-level until guest-to-room allocation exists.
+
 ## Staff recognition on private check-in links (037)
 
 Apply `supabase/migrations/202610230037_checkin_property_context.sql` then update the frontend. The public property profile now includes the resolved property ID, allowing the separate Stayman login to verify staff assignment even when a private link has no property parameter. Stored sessions that omit is_anonymous are no longer rejected before the server membership check. Anonymous or unassigned sessions still do not get Add another guest. No Edge Function deployment.

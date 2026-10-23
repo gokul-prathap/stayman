@@ -74,15 +74,17 @@ export function reportMetrics(data, from, to, timezone = 'Asia/Kolkata') {
       if (day >= r.check_in_date && day < r.check_out_date) earned += Number(r.total_amount) / nights(r.check_in_date, r.check_out_date);
     });
     const cash=cashByDay.get(day)||0;
-    days.push({ day, occupied: occupied.size, blocked: blocked.size, available, earned, cash,
+    const feeRevenue=(data.closureFees||[]).filter(f=>f.day===day).reduce((sum,f)=>sum+Number(f.amount||0),0);
+    days.push({ day, occupied: occupied.size, blocked: blocked.size, available, earned, cash, feeRevenue,
       occupancy: available ? occupied.size / available * 100 : 0 });
   }
   const occupied = days.reduce((s, d) => s + d.occupied, 0);
   const available = days.reduce((s, d) => s + d.available, 0);
   const earned = Math.round(days.reduce((s, d) => s + d.earned, 0));
   const cash = days.reduce((s, d) => s + d.cash, 0);
+  const feeRevenue=days.reduce((sum,d)=>sum+Number(d.feeRevenue||0),0);
   const opening=[...openingByDay].reduce((sum,[day,amount])=>sum+(day>=from&&day<=to?amount:0),0);
-  return { days, occupied, available, earned, cash, opening, occupancy: available ? occupied / available * 100 : 0,
+  return { days, occupied, available, earned, cash, feeRevenue, opening, occupancy: available ? occupied / available * 100 : 0,
     adr: occupied ? earned / occupied : 0, utilization: capacityNights ? occupied / capacityNights * 100 : 0,
     arrivals: reservations.filter(r => r.check_in_date >= from && r.check_in_date <= to),
     departures: reservations.filter(r => r.check_out_date >= from && r.check_out_date <= to) };

@@ -1,3 +1,4 @@
+import {bookingStatus} from '../utils/bookingStatus';
 import GuestProfile from './GuestProfile';
 import CheckinShare from './CheckinShare';
 import {checkinProgress} from '../../management/utils/guestOperations';
@@ -12,6 +13,8 @@ import ReservationDetails from './ReservationDetails';
 import PageState from '../../management/components/PageState';
 import { dayInZone, stayKind, money } from '../../management/utils/metrics';
 import '../../management/management.css';
+const amountDue = r => Number(r.status==='CANCELLED' ? r.closure_fee||0 : r.total_amount)-Number(r.paid_amount);
+const paymentLabel = r => r.status==='CANCELLED' && r.closure_money_handler==='EXTERNAL' ? 'Handled externally' : amountDue(r)===0 ? 'Settled' : money(Math.abs(amountDue(r)))+(amountDue(r)<0?' refund due':' due');
 export default function ReservationGuestList({ guestView = false }) {
   const { property } = useStaff();
   const [search,setSearch] = useState(''), [open,setOpen] = useState(false), [selected,setSelected] = useState(null), [filter,setFilter] = useState('all');
@@ -42,7 +45,7 @@ export default function ReservationGuestList({ guestView = false }) {
       })}</div>
     </> : <div className="card overflow-x-auto"><table><thead><tr><th>Guest</th><th>Dates</th><th>Bed assignments</th><th>Status</th><th>Web check-in</th><th>Payment</th><th>Details</th></tr></thead><tbody>{rows.map(r => {
       const guest=guests.find(g => g.id===r.guest_id);
-      return <tr key={r.id}><td><p className="font-semibold">{guest?.full_name}</p><p className="muted mt-1">{guest?.phone}</p></td><td className="whitespace-nowrap">{r.check_in_date}<br/>{r.check_out_date}</td><td>{allocations.filter(a => a.reservationDbId===r.id).map(a => { const u=units.find(u => u.id===a.unitId); return <p key={a.id} className="mb-1 whitespace-nowrap">{u?.roomName} / {u?.label}<span className="muted block">{a.checkInDate} → {a.checkOutDate}</span></p>; })}</td><td>{r.status}</td><td>{(()=>{const p=checkinProgress(data.members,r.id);return p.total?p.done+'/'+p.total+' submitted':'Not linked';})()}</td><td className="whitespace-nowrap"><p className="font-semibold">{money(r.total_amount)}</p><p className="muted mt-1">{Number(r.paid_amount)===Number(r.total_amount) ? 'Paid in full' : money(Math.abs(Number(r.total_amount)-Number(r.paid_amount))) + (Number(r.paid_amount)>Number(r.total_amount) ? ' refund due' : ' due')}</p></td><td><button className="primary reservation-view-action" onClick={() => setSelected(r.id)}>View / pay</button></td></tr>;
+      return <tr key={r.id}><td><p className="font-semibold">{guest?.full_name}</p><p className="muted mt-1">{guest?.phone}</p></td><td className="whitespace-nowrap">{r.check_in_date}<br/>{r.check_out_date}</td><td>{allocations.filter(a => a.reservationDbId===r.id).map(a => { const u=units.find(u => u.id===a.unitId); return <p key={a.id} className="mb-1 whitespace-nowrap">{u?.roomName} / {u?.label}<span className="muted block">{a.checkInDate} → {a.checkOutDate}</span></p>; })}</td><td>{bookingStatus(r)}</td><td>{(()=>{const p=checkinProgress(data.members,r.id);return p.total?p.done+'/'+p.total+' submitted':'Not linked';})()}</td><td className="whitespace-nowrap"><p className="font-semibold">{money(r.status==='CANCELLED'?r.closure_fee||0:r.total_amount)}</p><p className="muted mt-1">{paymentLabel(r)}</p></td><td><button className="primary reservation-view-action" onClick={() => setSelected(r.id)}>View / pay</button></td></tr>;
     })}</tbody></table></div>)}
     {!isPending && !rows.length && <p className="notice">No matching records. Create a reservation to add a guest.</p>}
     {open&&<Suspense fallback={<AppLoader label="Loading booking"/>}><NewReservationModal isOpen={open} onClose={() => setOpen(false)} units={units} allocations={allocations} defaultCheckinId={defaultCheckinId} onSaved={refresh}/></Suspense>}

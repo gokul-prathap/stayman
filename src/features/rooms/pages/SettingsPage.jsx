@@ -1,3 +1,4 @@
+import BookingPolicySettings from '../components/BookingPolicySettings';
 import React, { useEffect, useState } from 'react';
 import { useStaff } from '../../../components/auth/StaffGate';
 import { usePropertyData } from '../../reservations/hooks/usePropertyData';
@@ -5,7 +6,7 @@ import { saveSettings, databaseError } from '../../../services/stayman';
 import PageState from '../../management/components/PageState';
 import '../../management/management.css';
 const AiosellSettings = React.lazy(() => import('../components/AiosellSettings'));
-const tabs = ['Property','Users','Preferences','System','Aiosell'];
+const tabs = ['Property','Users','Preferences','Booking policies','System','Aiosell'];
 export default function SettingsPage() {
   const { property, reloadProperties } = useStaff();
   const { data, isPending, error, refresh } = usePropertyData({mode:'inventory'});
@@ -26,6 +27,7 @@ export default function SettingsPage() {
   const timezoneOptions = [...new Set(['Asia/Kolkata','UTC','Asia/Bangkok','Europe/London','America/New_York',form.timezone].filter(Boolean))];
   return <section className="management space-y-5"><h1>Settings</h1><p className="subtitle">Manage your property and workspace.</p><div className="tabs" role="tablist" aria-label="Settings section">{tabs.map(t => <button key={t} role="tab" aria-selected={t===tab} onClick={() => setTab(t)}>{t}</button>)}</div><PageState hasData={!!data} pending={isPending} error={error} retry={refresh}/>
     {data && <div className="max-w-3xl">
+      {tab === 'Booking policies'&&<BookingPolicySettings property={property}/>}
       {tab === 'Aiosell' && <React.Suspense fallback={<p>Loading channel manager...</p>}><AiosellSettings key={property.id} property={property} units={data.units || []} /></React.Suspense>}
       {(tab === 'Property' || tab === 'Preferences') && <form onSubmit={save} className="card"><fieldset disabled={true} className="space-y-6"><h2>{tab === 'Property' ? 'Property Details' : 'Regional Preferences'}</h2>
         <p className="notice">Property profile and billing details are read-only. Contact the platform administrator for changes.</p>

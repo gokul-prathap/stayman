@@ -1,0 +1,8 @@
+import {useState} from 'react';
+import {adminRpc} from '../../../services/platformAdmin';
+import {databaseError} from '../../../services/databaseErrors';
+export default function HistoricalStayCorrection({reservation,onSaved,onClose,past=false}){
+ const [reason,setReason]=useState(''),[confirmed,setConfirmed]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ async function submit(e){e.preventDefault();setBusy(true);setError('');try{await adminRpc('stayman_correct_stay_status',{p_reservation:reservation.id,p_action:past?'PAST_STAY':'ARRIVED',p_reason:reason,p_expected:reservation.status});await onSaved();onClose();}catch(err){setError(databaseError(err));}finally{setBusy(false);}}
+ return <form onSubmit={submit} className="rounded-xl border p-4 space-y-3"><h2>{past?'Confirm past stay & checkout':'Record missed check-in'}</h2><p>This corrects the whole booking on its existing dates: {reservation.check_in_date} to {reservation.check_out_date}. It does not add rooms, change prices or mark payments received.</p><label>Why is this being corrected?<input required minLength={3} maxLength={500} value={reason} onChange={e=>setReason(e.target.value)}/></label><label className="flex gap-2"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>I confirmed these guests actually stayed{past?' and have departed':''}, and reviewed their original room/bed assignments.</label><div className="flex flex-wrap gap-2"><button disabled={!confirmed||busy} className="primary">{busy?'Saving…':'Confirm correction'}</button><button type="button" disabled={busy} className="secondary" onClick={onClose}>Cancel</button></div>{error&&<p className="error" role="alert">{error}</p>}</form>;
+}

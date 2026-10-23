@@ -1,0 +1,19 @@
+import {useEffect,useState} from 'react';
+import {useQuery} from '@tanstack/react-query';
+import {adminRpc} from '../../../services/platformAdmin';
+import {databaseError} from '../../../services/databaseErrors';
+import {rupeesToPaise} from '../../management/utils/metrics';
+const types=[['NONE','No fee'],['FIXED','Fixed amount'],['PERCENT','Percentage of booking'],['FIRST_NIGHT','First night'],['FULL','Full booking amount']];
+export default function BookingPolicySettings({property}){
+ const query=useQuery({queryKey:['booking-policy',property.id],queryFn:()=>adminRpc('stayman_booking_policy',{p_property:property.id})});
+ const [form,setForm]=useState(null),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('');
+ useEffect(()=>{if(query.data){const p=query.data.policy||{name:'Standard policy',free_hours:24,cancellation:{type:'FIRST_NIGHT',value:0},no_show:{type:'FIRST_NIGHT',value:0}};setForm({...p,cancellation:{...p.cancellation,value:String(p.cancellation.value/(p.cancellation.type==='PERCENT'||p.cancellation.type==='FIXED'?100:1))},no_show:{...p.no_show,value:String(p.no_show.value/(p.no_show.type==='PERCENT'||p.no_show.type==='FIXED'?100:1))}});}},[query.data]);
+ async function save(e){e.preventDefault();setBusy(true);setError('');setMessage('');try{
+  const rule=key=>({type:form[key].type,value:['FIXED','PERCENT'].includes(form[key].type)?rupeesToPaise(form[key].value):0});
+  await adminRpc('stayman_save_booking_policy',{p_property:property.id,p_policy:{name:form.name,free_hours:Number(form.free_hours),cancellation:rule('cancellation'),no_show:rule('no_show')},p_version:query.data.version});await query.refetch();setMessage('Policy saved for new direct bookings. Existing bookings keep their saved terms.');
+ }catch(err){setError(databaseError(err));}finally{setBusy(false);}}
+ if(query.error)return <p className="error">{databaseError(query.error)}</p>;
+ if(!form)return <p>Loading booking policies…</p>;
+ const fee=(key,label)=><section className="rounded-xl border p-4 space-y-3"><h3>{label}</h3><label>Fee rule<select value={form[key].type} onChange={e=>setForm({...form,[key]:{type:e.target.value,value:'0'}})}>{types.map(([value,text])=><option value={value} key={value}>{text}</option>)}</select></label>{['FIXED','PERCENT'].includes(form[key].type)&&<label>{form[key].type==='FIXED'?'Amount (INR)':'Percentage'}<input required min="0" max={form[key].type==='PERCENT'?100:1000000} step="0.01" type="number" value={form[key].value} onChange={e=>setForm({...form,[key]:{...form[key],value:e.target.value}})}/></label>}</section>;
+ return <form className="card space-y-4" onSubmit={save}><h2>Cancellation & no-show policies</h2><p className="notice">Applies to new direct bookings only. Existing reservations keep a policy snapshot. OTA bookings require their own agreed terms; this does not change policies on external booking sites.</p>{!query.data.can_edit&&<p>Only the property owner can change these rules.</p>}<fieldset disabled={!query.data.can_edit||busy} className="space-y-4"><label>Policy name<input required minLength={2} maxLength={100} value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></label><label>Free cancellation until this many hours before check-in<input required type="number" min="0" max="8760" step="1" value={form.free_hours} onChange={e=>setForm({...form,free_hours:e.target.value})}/></label><p className="muted">Uses the property’s check-in time and timezone. After this deadline, the cancellation fee below applies. Fees are capped at the booking total.</p>{fee('cancellation','Cancellation after the free deadline')}{fee('no_show','Guest does not arrive')}<button className="primary">{busy?'Saving…':'Save policy for new bookings'}</button></fieldset>{error&&<p role="alert" className="error">{error}</p>}{message&&<p role="status" className="success">{message}</p>}</form>;
+}

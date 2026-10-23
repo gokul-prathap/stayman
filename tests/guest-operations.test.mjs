@@ -24,3 +24,10 @@ test('linked bookings can validate booked arrival while public check-in rejects 
  assert.throws(()=>validateGuestDetails(details,'2026-10-10'),/before today/);
  assert.equal(validateGuestDetails(details,details.arrival_date).arrival_date,'2026-10-09');
 });
+
+test('no-show refunds retain the reviewed fee and external settlements do not become property refunds',()=>{
+ const r={id:'r',status:'CANCELLED',closure_kind:'NO_SHOW',closure_fee:10000,total_amount:50000,paid_amount:30000};
+ assert.equal(refundSummary(r).pending,20000);
+ assert.equal(refundSummary({...r,paid_amount:10000}).pending,0);
+ assert.equal(refundSummary({...r,closure_money_handler:'EXTERNAL'}).pending,0);
+});

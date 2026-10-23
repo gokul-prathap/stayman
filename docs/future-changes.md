@@ -39,3 +39,15 @@ The production app domain is `https://stayman.in`.
 - [ ] Revoke temporary development admin password access before production launch; continue using administrator OTP login. See [billing and development login setup](billing-setup.md).
 
 Invitation and password-reset links use the app's current browser origin, so the domain does not need to be hardcoded in application code. Open the production site when sending real invitations. Pushing code does not update Supabase URL settings or Edge Function secrets.
+
+## OTA commission and payout reconciliation
+
+- [ ] Keep guest booking totals separate from OTA commission, payment charges, taxes withheld and property payouts; never deduct commission from the guest balance.
+- [ ] Confirm which policy, commission and payout fields Aiosell actually forwards before importing them. Preserve original OTA payloads and booking policies.
+- [ ] Support gross/net/unknown payout type, estimated versus confirmed commission, expected/actual payout and partial settlements. Prevent double deduction on net payouts.
+- [ ] Reconcile Booking.com/other OTA statements by external reservation reference; distinguish property-collected money from OTA-collected money and refunds handled externally.
+- [ ] Add owner-reviewed estimate defaults only as a fallback, with per-booking overrides and audit history. Do not assume a universal commission percentage.
+
+## Group arrival and closure follow-up
+
+- [ ] Link each guest to their room/bed and date ranges before enabling partial group no-shows, individual retained fees and independent refunds. Keep whole-booking no-show guarded by confirmation that nobody arrived.

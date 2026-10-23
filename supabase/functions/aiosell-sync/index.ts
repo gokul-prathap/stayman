@@ -13,12 +13,13 @@ Deno.serve(async request => {
   const service = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {auth: {persistSession: false}});
   let body;
   try { body = await request.json(); } catch { return reply({error: 'Invalid request.'}, 400); }
-  if (!body || typeof body !== 'object' || !['mapping', 'sync'].includes(body.action)) return reply({error: 'Invalid request.'}, 400);
+  if (!body || typeof body !== 'object' || !['mapping', 'sync', 'noshow'].includes(body.action)) return reply({error: 'Invalid request.'}, 400);
   const cronSecret = Deno.env.get('AIOSELL_WORKER_SECRET');
   const worker = !!cronSecret && request.headers.get('authorization') === `Bearer ${cronSecret}`;
+  let caller: any;
   if (!worker) {
     if (!allowed.includes(origin)) return reply({error: 'Origin is not allowed.'}, 403);
-    const caller = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {global: {headers: {Authorization: request.headers.get('authorization') || ''}}, auth: {persistSession: false}});
+    caller = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {global: {headers: {Authorization: request.headers.get('authorization') || ''}}, auth: {persistSession: false}});
     const {data, error} = await caller.auth.getUser();
     if (error || !data.user) return reply({error: 'Sign in again.'}, 401);
     const {data: owner} = await caller.rpc('stayman_is_owner', {p_property: body.property});
@@ -32,10 +33,30 @@ Deno.serve(async request => {
     try { return reply(await aiosellRequest(`/property_details/${encodeURIComponent(connection.hotel_code)}?partnerId=${encodeURIComponent(partner)}`, null, env)); }
     catch (error) { return reply({error: error instanceof Error ? error.message : 'Mapping fetch failed.'}, 502); }
   }
+  if (body.action === 'noshow') {
+    if (worker || !body.reservation) return reply({error:'Owner-confirmed reservation required.'},403);
+    const {data:state,error:stateError}=await caller.rpc('stayman_no_show_sync_state',{p_reservation:body.reservation});
+    if(stateError||!state?.can_send)return reply({error:'No no-show update is available for this booking.'},409);
+    if(state.needs_verification&&body.verified!==true)return reply({error:'Verify the provider booking status before retrying this no-show.'},409);
+  }
+  const sendNoShow=async(manual=false)=>{
+    const claim=await service.rpc('stayman_no_show_claim',{p_property:worker?null:body.property,p_reservation:manual?body.reservation:null,p_manual:manual});
+    if(claim?.error)return {status:'review',message:'No-show queue could not be read. Check database setup.'};
+    const task=claim?.data;if(!task)return null;
+    let failure:string|null=null;
+    try{await aiosellRequest(`/marknoshow/${encodeURIComponent(partner)}`,{hotelCode:task.hotelCode,bookingId:task.bookingId,channel:task.channel},env);}
+    catch(error){failure=error instanceof Error?error.message:'No-show request failed.';}
+    const {error:saveError}=await service.rpc('stayman_no_show_finish',{p_reservation:task.reservation,p_lease:task.lease,p_error:failure});
+    return {status:saveError||failure?'review':'sent',message:saveError?'Acknowledgement could not be saved. Verify the provider status before retrying.':failure?'Verify the provider status before retrying; the request may have been applied.':'No-show accepted by Aiosell.'};
+  };
+  if(body.action==='noshow'){
+    const result=await sendNoShow(true);
+    return reply(result||{status:'review',message:'Another no-show attempt is active or the queue changed.'},result?.status==='sent'?200:409);
+  }
   if (body.action !== 'sync') return reply({error: 'Unknown action.'}, 400);
   const {data: job, error} = await service.rpc('stayman_aiosell_claim', {p_property: worker ? null : body.property});
   if (error) return reply({error: 'Could not claim sync job.'}, 503);
-  if (!job) return reply({message: 'No pending sync. Another worker may be active.'});
+  if (!job) {const noShow=await sendNoShow();return reply({message:'No pending inventory sync. Another worker may be active.',...(noShow?{no_show:noShow}:{})});}
   const results: Record<string, {status: string; message: string; details?: any; verification?: any}> = {};
   const attempt = async (stage: string, action: () => Promise<unknown>) => {
     try { await action(); results[stage] ||= {status: 'sent', message: 'Accepted by Aiosell; verify in sandbox UI.'}; }
@@ -92,8 +113,9 @@ Deno.serve(async request => {
   const failure = incomplete.length ? incomplete.map(([stage, result]) => `${stage}: ${result.message}`).join(' ') : null;
   const {error: finishError} = await service.rpc('stayman_aiosell_finish_result', {p_property: job.property, p_lease: job.lease, p_revision: job.revision, p_results: results, p_error: failure});
   if (finishError) return reply({error: 'Sync completion could not be saved; a retry will reconcile it.'}, 503);
+  const noShow=await sendNoShow();
   const failed = Object.values(results).some(result => result.status === 'failed');
-  return reply({status: failed ? 'failed' : failure ? 'partial' : 'complete', results,
+  return reply({...(noShow?{no_show:noShow}:{}),status: failed ? 'failed' : failure ? 'partial' : 'complete', results,
     message: failure ? 'Sync partially completed. Review the individual results below.' : 'Inventory, rates and restrictions sent to Aiosell.',
     ...(failed ? {error: failure} : {warning: failure})}, failed ? 502 : 200);
 });
