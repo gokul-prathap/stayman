@@ -97,3 +97,39 @@ test('no-show handler sends documented payload and requires owner/provider verif
  owner=true;const failing=await load('aiosell-sync',{AIOSELL_ALLOWED_ORIGINS:'https://stayman.invalid'},()=>client,async()=>{throw new Error('Timeout');});
  response=await failing(request({action:'noshow',property:'p',reservation:'r',verified:true},'Bearer user','https://stayman.invalid'));assert.equal(response.status,409);assert.equal(finished.p_error,'Timeout');assert.match((await response.json()).message,/provider/);
 });
+
+
+test('only administrators can preview and verify a new hotel',async()=>{
+ let owner=true,admin=false,pathSeen,calls=[];
+ const client={auth:{getUser:async()=>({data:{user:{id:'u'}}})},from:()=>({select:()=>({eq:()=>({single:async()=>({error:{message:'No saved connection'}})})})}),rpc:async(name)=>{calls.push(name);return {data:name==='stayman_is_platform_admin'?admin:name==='stayman_is_owner'?owner:null};}};
+ const handler=await load('aiosell-sync',{AIOSELL_ALLOWED_ORIGINS:'https://stayman.invalid',AIOSELL_PARTNER_ID:'stayman'},()=>client,async(path)=>{pathSeen=path;return {hotel_id:'synthetic-hotel',rooms:[]};});
+ const req=()=>request({property:'p',action:'mapping',hotelCode:'synthetic-hotel'},'Bearer u','https://stayman.invalid');
+ assert.equal((await handler(req())).status,403);admin=true;
+ assert.equal((await handler(req())).status,200);assert.equal(pathSeen,'/property_details/synthetic-hotel?partnerId=stayman');
+ assert.ok(calls.includes('stayman_aiosell_store_remote'),'administrator preview persists verified metadata only');
+ assert.ok(!calls.includes('stayman_aiosell_configure'),'preview never changes active configuration');
+});
+test('two private-room rate plans publish two prices with one inventory category',async()=>{
+ const calls=[];
+ const job={property:'p',hotelCode:'h',lease:'l',revision:1,startDate:'2027-01-01',endDate:'2027-03-31',updates:[{startDate:'2027-01-01',endDate:'2027-01-01',rooms:[{roomCode:'private',available:1}]}],mappings:[{roomCode:'private',unitIds:['u'],minimumStay:1,stopSell:false,ratePlans:[{rateplanCode:'single',ratePaise:200000},{rateplanCode:'double',ratePaise:250000}]}]};
+ const client={from:()=>({select:()=>({eq:()=>({single:async()=>({data:{restriction_channels:['ota']}})})})}),rpc:async(name)=>name==='stayman_aiosell_claim'?{data:job}:name==='stayman_no_show_claim'?{data:null}: {}};
+ const handler=await load('aiosell-sync',{AIOSELL_WORKER_SECRET:'worker'},()=>client,async(path,body)=>{calls.push({path,body});return {success:true};});
+ assert.equal((await handler(request({action:'sync'},'Bearer worker'))).status,200);
+ assert.equal(calls[0].body.updates[0].rooms.length,1);
+ assert.deepEqual(calls[1].body.updates[0].rates,[{roomCode:'private',rateplanCode:'single',rate:2000},{roomCode:'private',rateplanCode:'double',rate:2500}]);
+ assert.equal(calls[2].body.updates[0].rooms.length,1);
+});
+
+
+test('verified booking sites preserve independent closures and report partial delivery',async()=>{
+ let finish;const calls=[];
+ const job={property:'p',hotelCode:'h',lease:'l',revision:2,salesOnly:true,startDate:'2027-01-01',endDate:'2027-03-31',sales:{rooms:{a:true,b:false}},sites:[{key:'closed',target:'site-a',open:false},{key:'open',target:'site-b',open:true}],siteSetupCount:2,blockedRooms:['held'],updates:[{startDate:'2027-01-01',endDate:'2027-01-01',rooms:[{roomCode:'a',available:1},{roomCode:'b',available:0},{roomCode:'held',available:0}]}],mappings:[{roomCode:'a',unitIds:['a'],minimumStay:1,stopSell:false},{roomCode:'b',unitIds:['b'],minimumStay:1,stopSell:true},{roomCode:'held',unitIds:['h'],minimumStay:1,stopSell:false}]};
+ const client={from:()=>({select:()=>({eq:()=>({single:async()=>({data:{restriction_channels:[]}})})})}),rpc:async(name,args)=>{if(name==='stayman_aiosell_claim')return {data:job};if(name==='stayman_no_show_claim')return {data:null};if(name==='stayman_aiosell_finish_delivery')finish=args;return {};}};
+ const handler=await load('aiosell-sync',{AIOSELL_WORKER_SECRET:'worker'},()=>client,async(path,body)=>{calls.push({path,body});if(body?.toChannels?.[0]==='site-b')throw new Error('Aiosell HTTP 503.');return {success:true};});
+ assert.equal((await handler(request({action:'sync'},'Bearer worker'))).status,502);
+ assert.ok(!calls.some(c=>c.path.includes('update-rates')),'manual sales while auto-off never pushes prices');
+ assert.ok(calls.find(c=>c.body.toChannels?.[0]==='site-a').body.updates[0].rooms.every(r=>r.restrictions.stopSell),'closed channel remains closed for all rooms');
+ const open=calls.find(c=>c.body.toChannels?.[0]==='site-b').body.updates[0].rooms;
+ assert.deepEqual(open.map(r=>r.restrictions.stopSell),[false,true,true]);
+ assert.equal(finish.p_results.restrictions.channels.closed.status,'sent');assert.equal(finish.p_results.restrictions.channels.open.status,'failed');assert.equal(finish.p_results.rates.status,'skipped');
+});

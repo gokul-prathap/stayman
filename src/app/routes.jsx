@@ -21,9 +21,14 @@ const PlatformAdminPage = lazy(() => import('../features/admin/PlatformAdminPage
 const InvoicePage = lazy(() => import('../features/billing/InvoicePage'));
 const PropertyProfilePage = lazy(() => import('../features/billing/PropertyProfilePage'));
 
+const AiosellPreviewPage=lazy(()=>import('../features/rooms/pages/AiosellPreviewPage'));
+const AdminPreviewPage=lazy(()=>import('../features/admin/AdminPreviewPage'));
+
 export function AppRoutes() {
   return (
     <Routes>
+      <Route path="/preview/admin" element={<Suspense fallback={<AppLoader fullPage/>}><AdminPreviewPage/></Suspense>}/>
+      <Route path="/preview/aiosell" element={<Suspense fallback={<AppLoader fullPage/>}><AiosellPreviewPage/></Suspense>}/>
       <Route path="/auth/set-password" element={<Suspense fallback={<AppLoader fullPage/>}><PasswordSetupPage /></Suspense>} />
       <Route path="/auth/reset-password" element={<Suspense fallback={<AppLoader fullPage/>}><PasswordSetupPage /></Suspense>} />
       <Route path="/guest-check-in" element={<Suspense fallback={<AppLoader fullPage/>}><GuestCheckinPage /></Suspense>} />

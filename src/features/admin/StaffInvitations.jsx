@@ -1,12 +1,13 @@
 import AppLoader from '../../components/ui/AppLoader';
-import {useState} from 'react';
+import {useState,useEffect} from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {MailPlus,Send,RefreshCw,ShieldCheck} from 'lucide-react';
 import {supabase} from '../../services/supabase';
 
-export default function StaffInvitations({properties,onChanged}){
- const [form,setForm]=useState({property:'',email:'',role:'MANAGER'}),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
- const query=useQuery({queryKey:['staff-invitations'],queryFn:async()=>{const {data,error}=await supabase.from('stayman_staff_invitations').select('id,property_id,email,role,status,sent_at,accepted_at').order('sent_at',{ascending:false}).limit(50);if(error)throw error;return data;},refetchInterval:30000});
+export default function StaffInvitations({properties,onChanged,propertyId='',onDirtyChange}){
+ const [form,setForm]=useState({property:propertyId,email:'',role:'MANAGER'}),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
+ useEffect(()=>{onDirtyChange?.(!!form.email.trim());return()=>onDirtyChange?.(false);},[form.email,onDirtyChange]);
+ const query=useQuery({queryKey:['staff-invitations',propertyId||'all'],queryFn:async()=>{let request=supabase.from('stayman_staff_invitations').select('id,property_id,email,role,status,sent_at,accepted_at');if(propertyId)request=request.eq('property_id',propertyId);const {data,error}=await request.order('sent_at',{ascending:false}).limit(50);if(error)throw error;return data;},refetchInterval:30000});
  async function invite(values){
   setBusy(true);setError('');setMessage('');
   try{

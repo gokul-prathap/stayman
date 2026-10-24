@@ -13,7 +13,7 @@ select cron.schedule('stayman-aiosell-sync', '* * * * *', $job$
  )
  from (
    select property_id from public.stayman_aiosell_connections
-   where enabled and (revision>synced_revision or last_synced_at is null or last_synced_at<now()-interval '12 hours')
+   where enabled and (auto_sync or manual_pending) and (revision>synced_revision or last_synced_at is null or last_synced_at<now()-interval '12 hours')
    and retry_at<=now() and (lease_until is null or lease_until<now())
    order by retry_at limit 10
  ) pending;

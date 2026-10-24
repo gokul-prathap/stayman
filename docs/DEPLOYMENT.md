@@ -1,3 +1,79 @@
+## Flat private-room rates (048)
+
+After migration 047, run `supabase/migrations/202610240048_aiosell_flat_room_rates.sql` in Supabase SQL Editor, then deploy the updated frontend. No Edge Function, secret or scheduler change is needed for this patch. Nothing has been applied automatically.
+
+This allows an Aiosell occupancy plan below the included guest allowance (for example, one guest when the base price includes up to two guests). Existing pricing already charges the base amount for fewer guests; additional guests above the allowance still incur the configured extra charge. The remote plan occupancy and maximum-capacity checks remain enforced. No stored property prices or mappings are changed by this migration. Use actual confirmed guest capacities; never infer occupancy from S/D suffixes.
+
+## Property administration workspace (047) — local changes awaiting release
+
+Keep these changes local until the remaining admin work is approved for release. No SQL or deployment has been performed by this implementation.
+
+At the final release, retain the order below. Apply only migrations that are not already recorded as applied:
+
+1. Deploy the updated backward-compatible `aiosell-sync` worker as described below.
+2. Apply migrations in order: 044 → 045 → 046 → **`202610240047_admin_workspace.sql`**. Never rerun an older Aiosell migration after 047: it retains separate verified snapshots for saved and candidate hotels.
+3. Build and deploy the frontend. No new API secrets, webhook change, cron job or manual data cleanup is required by 047.
+
+047 adds admin metrics, property-scoped access management with a last-owner guard, activity summaries, admin pricing through the existing unit rates, issued-invoice listing, and durable guided mapping transitions. It does not delete historical REVIEW folios, issued snapshots, bookings, payments or existing mappings. Existing billing tax and numbering logic remains unchanged.
+
+Platform navigation is Home / Properties / Users & access. A selected property has Overview, Property details, Rooms & beds, Pricing, Users & access, Billing, Aiosell and Activity tabs. Configuration remains platform-admin-only; owner controls use the same saved configuration. The embedded owner preview is read-only and does not impersonate an account.
+
+For mapping changes, review matches and choose **Save & restart updates**. Stayman saves the proposed change, closes the old mapped categories over the existing rolling 90-day window, and attempts delivery. After inventory acceptance, verify old zero availability in Aiosell and finish the saved change. Closing all old categories is conservative because the existing pause guard requires full old-inventory closure. A failed closure keeps old matches and the saved proposal; a failed restart keeps the new matches. Previously approved unchanged-hotel connections can restart, while new/replaced associations require owner review. Existing room/site closures and automatic-update preferences are retained. Linked OTA bookings continue to block hotel replacement.
+
+Local previews: `/preview/admin` exercises the production configuration component using a network-free synthetic adapter, including unconfigured/incomplete/ready/connected, failed lookup, linked-booking block and delivery outcomes. `/preview/aiosell` exercises owner operations. Neither preview changes real properties. Real categories are fetched only by authenticated admin setup, never copied from the samples.
+
+Local verification: `npm run build`; `node --test tests/*.test.mjs`; mocked Playwright checks `qa/admin-workspace-smoke.py`, `qa/aiosell-admin-smoke.py`, `qa/aiosell-owner-smoke.py` (requires the local preview server on port 4173). Test requests are intercepted; the checks do not contact live Supabase or Aiosell. Live API/OTA acceptance must be checked after release using the actual property configuration.
+
+## Owner online-sales screen and administrator setup (046)
+
+This replaces the owner hotel-ID/mapping workflow described in 045. Keep 045 applied; do not rerun older migrations after 046.
+
+Release in this order:
+
+1. Deploy the updated worker first: `npx supabase@latest functions deploy aiosell-sync --project-ref lyyjidxpskfcuksfhjpy --no-verify-jwt --use-api`.
+2. After migrations through 045, run `supabase/migrations/202610240046_aiosell_owner_operations.sql` in Supabase SQL Editor. It updates the existing `stayman-aiosell-sync` cron job when present, without creating a second job. No new secrets or webhook deployment.
+3. Build and deploy the frontend. Local development preview: `npm run dev`, then open `/preview/aiosell` on that local URL. This anonymous preview is labelled simulated, uses synthetic data and never contacts Aiosell/Supabase.
+4. Platform admin > property setup > Aiosell configuration: fetch/verify the actual hotel; match Stayman units to fetched categories; configure included/max guests and extra-guest rules; prepare the offering for owner review. Verify returned inventory-channel targets with Aiosell before enabling owner booking-site controls. Choose their initial sales preference explicitly; re-verification preserves existing owner preferences.
+5. Owner > Settings > Aiosell: review the prepared read-only rooms/prices and Start selling online. The page distinguishes desired settings, Aiosell acceptance, pending delivery and failure. No technical mapping fields or secrets are returned in the owner state.
+
+Existing active connections keep their delivery behaviour, but their owner controls show setup incomplete until an administrator verifies/prepares them. To change existing mappings, complete the guided old-inventory closure and pause. Previously closed rooms are remembered and restored when preparing replacement matches. Existing linked OTA bookings still block unsafe hotel replacement.
+
+Automatic updates is now independent of receiving reservations. Turning it off leaves incoming webhooks enabled and does not close remote sales. Manual room/site sales changes queue and attempt delivery immediately, including while automatic updates are off. In that case only sales data is sent, not pending price changes. An already running update may finish. Closures/openings apply to the stated rolling 90-day window; the UI does not promise all future dates.
+
+A booking-site switch is available only for an administrator-verified inventory target returned by Aiosell. Unsupported/unknown setup is not guessed. Restrictions combine room closure OR site closure OR affected-category review hold. Reopening one scope does not reopen the others. Aiosell success is displayed as Sent to Aiosell, never proof of OTA application.
+
+Private-room guest pricing is explicit. A base amount can include 2 guests with an extra-guest charge for 3, but each advertised guest count needs a correctly configured remote plan. Do not relabel single/double plans as 2/3 guests. The configured guest count must match Aiosell's returned occupancy when provided. Missing plan coverage blocks owner activation. No property prices or occupancy limits are hardcoded outside the simulated preview.
+
+Bookings needing attention has a guided review dialog. Owners can link a checked existing reservation, or create a new book-event reservation after duplicate/availability checks. Modifications/cancellations require correcting the actual stay/payment state first. Failed creation rolls back partially inserted guests/bookings; repeated creation returns the linked booking. Review holds close affected categories rather than unrelated property inventory.
+
+See `docs/aiosell-capabilities.md` for verified API boundaries and remaining limitations.
+
+## Guided Aiosell mapping and multiple rate plans (045)
+
+Release steps (local source changes do not update the live app):
+
+1. Redeploy the backward-compatible worker from the project folder:
+   `npx supabase@latest functions deploy aiosell-sync --project-ref lyyjidxpskfcuksfhjpy --no-verify-jwt --use-api`
+2. After migrations through 044 are applied, run `supabase/migrations/202610240045_aiosell_guided_mapping.sql` in Supabase SQL Editor.
+3. Build/deploy the frontend using the existing hosting workflow. No webhook redeployment, new secret or scheduler change is needed.
+4. In Settings > Aiosell, choose Manage mappings (if already connected). Enter the hotel code supplied by Aiosell, Connect & fetch units, confirm unit matches and property details, then Review activation > Save & activate.
+
+Connect previews mappings without saving/changing the existing connection. One physical unit is selected per category; exact-name suggestions always require owner confirmation. Legacy grouped mappings remain stored until closed and explicitly changed. Unmatched Aiosell categories are not closed by Stayman: verify them in Aiosell before activation. Non-INR activation is blocked.
+
+Each mapping can contain multiple rate plans while publishing inventory only once. All selected plans follow the unit price by default. Pricing > Channel rate-plan prices supports explicit independent fixed prices. Fixed prices do not change when base prices change. Confirm single/double plan meanings with Aiosell; no automatic occupancy multiplier is inferred. Bookings received on either selected plan use the same inventory mapping.
+
+To replace/remove mappings: Change mappings or pause connection > Close inventory to change mappings. The UI saves stop-sell and requests sync, waits for acknowledgement, then requires the owner to verify zero availability in Aiosell before Pause & unlock mappings. Failures leave mappings intact. Refresh/retry continues the process after reload. After remapping, explicitly select Reopen all matched categories when activating if you want the closed categories back on sale; otherwise their stop-sell state is preserved. Provider access errors must be resolved with Aiosell; do not reset database guards to bypass closure. Hotel changes after linked OTA bookings still require migration/support, preserving booking identity.
+
+For the supplied property: hotel code `1b8ae0cf67`; match eight individual MDR/MDRA beds and two private-room categories after fetching. Confirm every rate plan is returned by Aiosell. These identifiers are not hardcoded for other properties.
+
+## Optional OTA phone repair (044)
+
+Run `supabase/migrations/202610230044_ota_optional_phone.sql` in Supabase SQL Editor after the existing Aiosell setup (027 onward). No frontend or Edge Function deployment is required for this repair. The existing phone-length rules from 010 must exist.
+
+Missing/invalid/non-international inbound OTA numbers become NULL with `ota_contact_withheld=true`; the booking notes request a verified contact number at check-in. Valid international numbers are saved without punctuation. Original event payload remains available for review. Direct guest and completed web-check-in validation remain strict.
+
+Previously received REVIEW events are not automatically replayed: duplicate delivery still deduplicates. Use the existing owner reconciliation flow after verifying the latest OTA booking, or ask Aiosell for a new test booking ID to validate the fix. Do not delete event rows or disable phone validation globally.
+
 ## Guest review, policies and no-show update (039-043)
 
 1. Apply existing migrations through 038 first. Resolve migration 035's payment-allocation guard if it reports existing receipts needing reconciliation.

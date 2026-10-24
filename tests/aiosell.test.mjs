@@ -134,3 +134,72 @@ test('database mapping, durable webhook, duplicate handling, review stop-sell an
     assert.equal((await db.query("select has_function_privilege('authenticated','stayman_aiosell_claim_inventory(uuid)','execute') allowed")).rows[0].allowed,false);
   } finally { await db.close(); }
 });
+
+
+test('OTA contacts, multiple plan imports and guarded configuration changes', async () => {
+ const db=await createWorkspaceFixture(0);
+ try {
+  await db.exec(`create role service_role;
+   alter table stayman_guests alter id set default gen_random_uuid();
+   alter table stayman_reservations alter id set default gen_random_uuid();
+   alter table stayman_allocations alter id set default gen_random_uuid();
+   alter table stayman_reservations add source text default 'Direct Booking';
+   alter table stayman_reservations add notes text default '';
+   alter table stayman_reservations alter status set default 'PENDING';
+   alter table stayman_reservations alter paid_amount set default 0;`);
+  await db.exec(await readFile(new URL('../supabase/migrations/202610220027_aiosell_channel_manager.sql',import.meta.url),'utf8'));
+  const phoneSql=await readFile(new URL('../supabase/migrations/202610100010_walkin_inbox.sql',import.meta.url),'utf8');
+  const rules=phoneSql.indexOf('create table public.stayman_phone_lengths');
+  assert.ok(rules>=0);
+  await db.exec(phoneSql.slice(rules,phoneSql.indexOf('create trigger stayman_web_phone_length')));
+  const update=await readFile(new URL('../supabase/migrations/202610230044_ota_optional_phone.sql',import.meta.url),'utf8');
+  await db.exec(update);await db.exec(update);
+  for(const name of ['202610220028_aiosell_sync_results.sql','202610220029_aiosell_follow_pricing.sql','202610220030_aiosell_pause_after_inventory_closure.sql','202610240045_aiosell_guided_mapping.sql']){const sql=await readFile(new URL('../supabase/migrations/'+name,import.meta.url),'utf8');await db.exec(sql);await db.exec(sql);}
+  const unit=(await db.query('select id from stayman_units order by id limit 1')).rows[0].id;
+  await rpc(db,'stayman_aiosell_save',{p_property:property,p_hotel:'sandbox-pms',p_enabled:true,p_mappings:[{roomCode:'suite',rateplanCode:'suite-ep',unitIds:[unit],ratePaise:60000,minimumStay:1,stopSell:false,ratePlans:[{rateplanCode:'suite-ep',rateSource:'pricing'},{rateplanCode:'suite-double',rateSource:'fixed',ratePaise:250000}]}]});
+  for(const [i,phone] of [null,'','+91123','9876543210','+91 98765 43210'].entries()) {
+   const b=normalizeReservation({...booking(),rooms:[{roomCode:'suite',rateplanCode:i===4?'suite-double':'suite-ep'}],bookingId:'PHONE-'+i,guest:{firstName:'Contact',lastName:'Test',phone},checkin:`2027-02-${String(i*3+1).padStart(2,'0')}`,checkout:`2027-02-${String(i*3+2).padStart(2,'0')}`});
+   await rpc(db,'stayman_aiosell_receive',{p_payload:b});
+   const event=(await db.query('select status,issue from stayman_aiosell_events where booking_id=$1',[b.bookingId])).rows[0];assert.equal(event.status,'APPLIED',event.issue);
+  }
+  let status=await rpc(db,'stayman_aiosell_pricing_status',{p_property:property});
+  assert.equal(status.mappings.length,1);assert.equal(status.mappings[0].ratePlans.length,2);
+  assert.equal(status.mappings[0].ratePlans[1].ratePaise,250000);
+  await assert.rejects(rpc(db,'stayman_aiosell_plan_prices',{p_property:property,p_revision:status.revision-1,p_prices:[]}),/Configuration changed/);
+  await rpc(db,'stayman_aiosell_plan_prices',{p_property:property,p_revision:status.revision,p_prices:[{roomCode:'suite',rateplanCode:'suite-double',rateSource:'fixed',ratePaise:260000}]});
+  const maps=(await rpc(db,'stayman_aiosell_settings',{p_property:property})).connection.mappings;
+  await assert.rejects(rpc(db,'stayman_aiosell_save',{p_property:property,p_hotel:'sandbox-pms',p_enabled:true,p_mappings:maps.map(m=>({...m,ratePlans:[m.ratePlans[0]]}))}),/Change mappings/);
+  const second=(await db.query('select id from stayman_units where id<>$1 limit 1',[unit])).rows[0].id;
+  await assert.rejects(rpc(db,'stayman_aiosell_save',{p_property:property,p_hotel:'sandbox-pms',p_enabled:true,p_mappings:maps.map(m=>({...m,unitIds:[second]}))}),/Change mappings/);
+  await assert.rejects(rpc(db,'stayman_aiosell_configure',{p_property:property,p_hotel:'sandbox-pms',p_enabled:true,p_mappings:maps,p_revision:-1}),/Configuration changed/);
+  status=await rpc(db,'stayman_aiosell_pricing_status',{p_property:property});
+  await assert.rejects(rpc(db,'stayman_aiosell_plan_prices',{p_property:property,p_revision:status.revision,p_prices:[{roomCode:'suite',rateplanCode:'suite-double',rateSource:'fixed',ratePaise:0}]}),/positive/);
+  await assert.rejects(rpc(db,'stayman_aiosell_configure',{p_property:property,p_hotel:'sandbox-pms',p_enabled:false,p_mappings:maps,p_revision:status.revision}),/Stop sell/);
+  const job=await rpc(db,'stayman_aiosell_claim',{p_property:property});
+  assert.ok(job.updates.every(day=>day.rooms.length===1&&day.rooms[0].available<=1),'extra plans never duplicate inventory');
+  status=await rpc(db,'stayman_aiosell_pricing_status',{p_property:property});
+  assert.equal(status.mappings[0].ratePlans[1].ratePaise,260000);
+  await db.query('update stayman_units set nightly_rate_paise=120000 where id=$1',[unit]);
+  status=await rpc(db,'stayman_aiosell_pricing_status',{p_property:property});
+  assert.equal(status.mappings[0].ratePlans[0].ratePaise,120000);assert.equal(status.mappings[0].ratePlans[1].ratePaise,260000,'fixed channel price stays independent');
+  const closedMaps=maps.map(m=>({...m,stopSell:true}));
+  await rpc(db,'stayman_aiosell_configure',{p_property:property,p_hotel:'sandbox-pms',p_enabled:true,p_mappings:closedMaps,p_revision:status.revision});
+  await rpc(db,'stayman_aiosell_finish_result',{p_property:property,p_lease:job.lease,p_revision:job.revision,p_results:{inventory:{status:'sent'}},p_error:null});
+  status=await rpc(db,'stayman_aiosell_pricing_status',{p_property:property});
+  await assert.rejects(rpc(db,'stayman_aiosell_configure',{p_property:property,p_hotel:'sandbox-pms',p_enabled:false,p_mappings:closedMaps,p_revision:status.revision}),/Stop sell/,'old snapshot acknowledgement cannot unlock closure');
+  const closeJob=await rpc(db,'stayman_aiosell_claim',{p_property:property});assert.ok(closeJob.updates.every(day=>day.rooms[0].available===0));
+  await rpc(db,'stayman_aiosell_finish_result',{p_property:property,p_lease:closeJob.lease,p_revision:closeJob.revision,p_results:{inventory:{status:'sent'},restrictions:{status:'pending'}},p_error:'Restrictions pending'});
+  status=await rpc(db,'stayman_aiosell_pricing_status',{p_property:property});
+  await rpc(db,'stayman_aiosell_configure',{p_property:property,p_hotel:'sandbox-pms',p_enabled:false,p_mappings:closedMaps,p_revision:status.revision});
+  assert.equal((await rpc(db,'stayman_aiosell_settings',{p_property:property})).connection.enabled,false);
+  await db.exec("set qa.allowed='no'");
+  await assert.rejects(rpc(db,'stayman_aiosell_configure',{p_property:property,p_hotel:'sandbox-pms',p_enabled:true,p_mappings:maps,p_revision:null}),/Owner access/);
+  assert.equal((await db.query("select has_function_privilege('anon','stayman_aiosell_configure(uuid,text,boolean,jsonb,bigint)','execute') allowed")).rows[0].allowed,false);
+  await db.exec("set qa.allowed='yes'");
+  const contacts=(await db.query('select phone,ota_contact_withheld from stayman_guests order by phone nulls first')).rows;
+  assert.equal(contacts.filter(x=>x.phone===null&&x.ota_contact_withheld).length,4);
+  assert.ok(contacts.some(x=>x.phone==='+919876543210'&&!x.ota_contact_withheld));
+  await assert.rejects(db.query("insert into stayman_guests(property_id,full_name,phone,gender) values($1,'Direct test','+91123','OTHER')",[property]),/Phone number length/);
+  await assert.rejects(db.query("insert into stayman_guests(property_id,full_name,phone,gender) values($1,'Direct test',null,'OTHER')",[property]),/Phone number length/);
+ } finally {await db.close();}
+});

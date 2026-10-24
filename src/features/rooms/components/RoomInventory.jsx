@@ -1,13 +1,14 @@
 import AppLoader from '../../../components/ui/AppLoader';
-import {useState} from 'react';
+import {useState,useEffect} from 'react';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
 import {Plus,Pencil,BedDouble} from 'lucide-react';
 import {adminRpc} from '../../../services/platformAdmin';
 import {money,rupeesToPaise,roomGroups} from '../../management/utils/metrics';
 import './room-inventory.css';
-export default function RoomInventory({property}){
+export default function RoomInventory({property,onDirtyChange}){
  const client=useQueryClient(),query=useQuery({queryKey:['room-inventory',property.id],queryFn:()=>adminRpc('stayman_room_inventory',{p_property:property.id})});
  const [form,setForm]=useState(null),[rename,setRename]=useState(null),[archive,setArchive]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[search,setSearch]=useState(''),[archived,setArchived]=useState(false);
+ useEffect(()=>{onDirtyChange?.(!!(form||rename||archive));},[form,rename,archive,onDirtyChange]);
  const units=query.data?.units||[],canManage=query.data?.can_manage,active=units.filter(u=>!u.archived_at);
  const visible=units.filter(u=>Boolean(u.archived_at)===archived&&[u.room_name,u.label].some(value=>value.toLowerCase().includes(search.toLowerCase())));
  const groups=roomGroups(visible.map(u=>({...u,roomName:u.room_name,type:u.unit_type})));

@@ -1,3 +1,4 @@
+import AiosellPlanPrices from '../components/AiosellPlanPrices';
 import React, { useEffect, useState } from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {Link} from 'react-router-dom';
@@ -75,11 +76,12 @@ export default function PricingPage() {
     {data?.isOwner && <div className="card space-y-2"><h2>Aiosell rate sync</h2>
       {channel.isPending ? <p>Loading rate sync status...</p> : channel.error ? <p role="alert">Rate sync status unavailable. Apply migration 029 if setup is missing. Local pricing can still be saved.</p> : <>
         <p><strong>{({not_configured:'Not configured',paused:'Paused',pending:'Pending',sent:'Sent',failed:'Failed'})[channel.data?.status]}</strong>{channel.data?.message ? `: ${channel.data.message}` : ''}</p>
-        {channel.data?.mappings?.map(mapping => <p key={mapping.roomCode}>{mapping.roomCode}: {mapping.priceError || `INR ${(mapping.ratePaise / 100).toFixed(2)} per unit / night`}</p>)}
+        {channel.data?.mappings?.map(mapping => <p key={mapping.key}>{mapping.name}: {mapping.priceIssue || `INR ${(mapping.price / 100).toFixed(2)} per unit / night`}</p>)}
         <p className="muted">Saving prices immediately attempts Aiosell sync when the connection is enabled. The background scheduler handles retries and other inventory changes. Restrictions have a separate status.</p>
       </>}
       <div className="flex flex-wrap gap-3"><Link to="/settings" className="secondary">Open Aiosell in Settings</Link><button type="button" className="secondary" disabled={channel.isFetching} onClick={() => channel.refetch()}>Refresh rate sync status</button></div>
     </div>}
+    {data?.isOwner && <AiosellPlanPrices propertyId={property.id} channel={channel}/>}
     {data && <form onSubmit={reviewSave}><fieldset disabled={busy || !!pendingSave || !data.isOwner} className="space-y-5">
       {!data.isOwner && <p className="notice">Only a property owner can change pricing.</p>}
       <div className="grid gap-4 sm:grid-cols-2">{[['BED','All dorm beds'],['ROOM','All private rooms']].map(([type,label]) => <div key={type} className="card"><h2>{label}</h2><p className="muted mt-1">{type === 'BED' ? 'Price per bed, per night' : 'Price per room, per night'}</p><div className="mt-4 flex items-end gap-3"><label className="flex-1">Nightly rate (INR)<input type="number" min="0" max="1000000" step="0.01" value={bulk[type]} onChange={e => setBulk(v => ({...v,[type]:e.target.value}))}/></label><button type="button" onClick={() => apply(type)} className="secondary">Apply to all</button></div></div>)}</div>
@@ -102,7 +104,7 @@ export default function PricingPage() {
           </div>;
         })}</div>}
         {!groups.length && <p className="notice">Add rooms and beds before setting rates.</p>}
-        <p className="muted">Aiosell requires one price per mapped room category. If individual units have different prices, map them to separate Aiosell categories or align their prices.</p>
+        <p className="muted">Each Aiosell category has one inventory mapping. Map individually priced beds/rooms separately. Optional rate-plan prices above can differ while sharing the same availability.</p>
       </div>
       {saveError && <p role="alert" className="error">{saveError}</p>}{message && <p role="status" className="success">{message}</p>}
       {syncFeedback && <p role={syncFeedback.state === 'failed' ? 'alert' : 'status'} className={syncFeedback.state === 'failed' ? 'notice' : 'success'}>{syncFeedback.message}</p>}

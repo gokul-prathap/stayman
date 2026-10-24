@@ -1,152 +1,60 @@
-import React, {useState} from 'react';
-import {createPortal} from 'react-dom';
+import React,{useRef,useState,useEffect} from 'react';
 import {Link} from 'react-router-dom';
-import {RefreshCw} from 'lucide-react';
 import {useQuery} from '@tanstack/react-query';
-import {db} from '../../../services/stayman';
-import {validateAiosellMappings} from '../../../services/aiosellMappings';
-import CollapsibleCard from '../../../components/ui/CollapsibleCard';
-import StopSellConfirmation from './StopSellConfirmation';
+import {ChevronDown,RefreshCw,CheckCircle2,AlertCircle} from 'lucide-react';
+import {aiosellOwnerAdapter} from '../../../services/aiosellOwner';
+import {money} from '../../management/utils/metrics';
+import {useVisiblePolling} from '../../reservations/hooks/useVisiblePolling';
 import './aiosell-settings.css';
-
-const emptyMapping = () => ({roomCode: '', rateplanCode: '', unitIds: [], minimumStay: 1, stopSell: false});
-async function rpc(name, args) {
-  const {data, error} = await db().rpc(name, args);
-  if (error) throw error;
-  return data;
+function Confirm({title,children,onCancel,onConfirm,busy,label='Confirm'}){
+ const ref=useRef(null),cancel=useRef(null);
+ useEffect(()=>{ref.current.showModal();cancel.current?.focus();return()=>ref.current?.close();},[]);
+ return <dialog ref={ref} aria-label={title} className="aiosell-owner-dialog" onCancel={e=>{e.preventDefault();if(!busy)onCancel();}}><h3>{title}</h3>{children}<div className="ao-actions"><button ref={cancel} type="button" className="secondary" disabled={busy} onClick={onCancel}>Keep current setting</button><button type="button" className="primary" disabled={busy} onClick={onConfirm}>{busy?'Sending...':label}</button></div></dialog>;
 }
-export default function AiosellSettings({property, units}) {
-  const [form, setForm] = useState(null), [busy, setBusy] = useState(false), [message, setMessage] = useState(''), [error, setError] = useState(''), [remote, setRemote] = useState(null);
-  const [channels, setChannels] = useState(null), [syncResults, setSyncResults] = useState(null);
-  const [syncNotice, setSyncNotice] = useState(null);
-  const [stopSellChange, setStopSellChange] = useState(null);
-  const query = useQuery({queryKey: ['aiosell-settings', property.id], queryFn: () => rpc('stayman_aiosell_settings', {p_property: property.id}), staleTime: 30000, retry: false});
-  const connection = query.data?.connection;
-  const savedMappings = connection?.mappings || [];
-  const allStopSold = savedMappings.length > 0 && savedMappings.every(mapping => mapping.stopSell === true);
-  const inventoryAcknowledged = connection?.revision != null && connection?.last_sync_results?.revision === connection.revision && connection?.last_sync_results?.stages?.inventory?.status === 'sent';
-  const canPause = allStopSold && (inventoryAcknowledged || connection?.revision != null && connection?.synced_revision === connection.revision && !connection?.last_error);
-  const current = form || {hotel: connection?.hotel_code || 'sandbox-pms', enabled: connection?.enabled || false, mappings: connection?.mappings || []};
-  const inventoryResult = (syncResults || connection?.last_sync_results?.stages)?.inventory;
-  const traceRows = inventoryResult?.verification?.rows || inventoryResult?.details?.rows || [];
-  const edit = changes => setForm({...current, ...changes});
-  const editMapping = (index, changes) => edit({mappings: current.mappings.map((m, i) => i === index ? {...m, ...changes} : m)});
-  async function run(action) {
-    setBusy(true); setError(''); setMessage('');
-    let latestResults = null;
-    if (action === 'sync') setSyncNotice(null);
-    try {
-      if (action === 'save') {
-        const mappings = validateAiosellMappings(current.mappings);
-        await rpc('stayman_aiosell_save', {p_property: property.id, p_hotel: current.hotel.trim(), p_enabled: current.enabled, p_mappings: mappings});
-        setForm(null); await query.refetch(); setMessage('Connection saved.');
-      } else {
-        const {data, error: invocationError} = await db().functions.invoke('aiosell-sync', {body: {property: property.id, action}});
-        if (invocationError) {
-          let detail;
-          try { detail = await invocationError.context?.json(); } catch { /* Use safe SDK message. */ }
-          if (detail?.results) { latestResults = detail.results; setSyncResults(detail.results); }
-          await query.refetch();
-          throw new Error(detail?.error || invocationError.message);
-        }
-        if (data.results) { latestResults = data.results; setSyncResults(data.results); }
-        if (data.error) throw new Error(data.error);
-        if (action === 'mapping') { setRemote(data); setMessage('Property mapping fetched. Select matching codes below.'); }
-        else {
-          setMessage(data.message);
-          setSyncNotice({title: data.status === 'complete' ? 'Sync completed' : data.status === 'partial' ? 'Sync partially completed' : 'Sync status', message: data.message, results: latestResults});
-        }
-        await query.refetch();
-      }
-    } catch (err) {
-      const message = err.message || 'Aiosell request failed.';
-      setError(message);
-      if (action === 'sync') setSyncNotice({title: 'Sync failed', message, results: latestResults});
-    } finally { setBusy(false); }
-  }
-  async function saveChannels() {
-    setBusy(true); setError(''); setMessage('');
-    try {
-      await rpc('stayman_aiosell_channels', {p_property: property.id, p_channels: (channels ?? (connection?.restriction_channels || []).join(',')).split(',').map(value => value.trim()).filter(Boolean)});
-      setChannels(null); await query.refetch(); setMessage('Restriction targets saved. Click Sync now to test.');
-    } catch (err) { setError(err.message); } finally { setBusy(false); }
-  }
-  async function resolve(event, eventId) {
-    event.preventDefault(); const reservation = new FormData(event.currentTarget).get('reservation');
-    setBusy(true); setError('');
-    try { await rpc('stayman_aiosell_resolve', {p_event: eventId, p_reservation: reservation}); await query.refetch(); setMessage('Event reconciled. Sync inventory to publish availability.'); }
-    catch (err) { setError(err.message); } finally { setBusy(false); }
-  }
-  if (query.isPending) return <p role="status">Loading Aiosell settings...</p>;
-  if (query.error) return <p role="alert" className="error">{query.error.message} Apply migration 027 if Aiosell setup is missing. Owner access is required.</p>;
-  return <div className="card space-y-5">
-    {stopSellChange && <StopSellConfirmation roomCode={stopSellChange.roomCode} enabled={stopSellChange.enabled}
-      onCancel={() => setStopSellChange(null)} onConfirm={() => {
-        if (current.mappings[stopSellChange.index]?.roomCode === stopSellChange.roomCode) {
-          editMapping(stopSellChange.index, {stopSell: stopSellChange.enabled});
-          setMessage('Stop-sell change confirmed in draft. Save mappings, then sync to apply it in Aiosell.');
-        }
-        setStopSellChange(null);
-      }} />}
-    {syncNotice && createPortal(<aside role="status" aria-live="polite" aria-atomic="true" aria-label="Aiosell sync notification" className="fixed top-4 left-4 right-4 sm:left-auto sm:w-96 z-[100] rounded-xl border border-slate-300 bg-white text-slate-900 p-5 shadow-xl">
-      <div className="flex items-start justify-between gap-4"><strong>{syncNotice.title}</strong><button type="button" aria-label="Dismiss sync notification" onClick={() => setSyncNotice(null)} className="px-2 text-lg leading-none">×</button></div>
-      <p className="mt-2 text-sm">{syncNotice.message}</p>
-      {syncNotice.results && <ul className="mt-3 space-y-1 text-sm">{Object.entries(syncNotice.results).map(([stage, result]) => <li key={stage}>{stage[0].toUpperCase() + stage.slice(1)}: {result.status === 'sent' ? 'Sent' : result.status === 'pending' ? 'Pending' : 'Failed'}</li>)}</ul>}
-    </aside>, document.body)}
-    <h2>Aiosell channel manager</h2>
-    <p className="muted">Channel prices follow the Pricing page for a rolling 90-day window. Change prices once in Pricing; mapped units must have the same positive nightly rate. Existing reservation totals stay unchanged. One rate plan per room type is supported.</p>
-    <p className="muted">Stop sell closes a category to new online bookings; existing bookings remain. To remove or rename saved mappings: tick Stop sell on every mapping, save, then Sync now. Verify zero availability in Aiosell, then pause the connection and save before editing.</p>
-    <fieldset disabled={busy} className="space-y-4">
-      <label>Hotel code<input value={current.hotel} maxLength={120} onChange={e => {edit({hotel: e.target.value}); setRemote(null);}} /></label>
-      <div className="aiosell-sync-control"><button type="button" role="switch" aria-label="Enable background sync and receive bookings" aria-checked={current.enabled}
-        className="aiosell-sync-switch" disabled={!!connection?.enabled && !canPause} aria-describedby={'aiosell-sync-help aiosell-save-help' + (connection?.enabled ? ' aiosell-pause-help' : '')}
-        onClick={() => {if (!connection?.enabled || canPause) edit({enabled: !current.enabled});}}><span><RefreshCw size={16} aria-hidden="true" /></span></button>
-        <div><strong>Background sync: {current.enabled ? 'On' : 'Off'}</strong><p className="muted">{current.enabled !== !!connection?.enabled ? 'Unsaved change - click Save connection to apply.' : connection?.enabled ? 'Connection active.' : 'Connection paused or not yet configured.'}</p></div>
-      </div>
-      <p id="aiosell-sync-help" className="muted">Enables scheduled inventory and rate updates, plus receiving OTA booking events through Aiosell. The background scheduler must be configured; this switch does not install it.</p>
-      {connection?.enabled && <p id="aiosell-pause-help" className="muted">{canPause ? 'Closed inventory was acknowledged. Verify zero availability in Aiosell, then switch background sync off and Save connection to unlock mapping removal.' : 'Pausing is locked until every saved mapping is stop-sold and its inventory update is acknowledged. Save mappings remains available to close inventory.'}</p>}
-      <div className="flex flex-wrap gap-2"><button className="secondary" onClick={() => run('save')}>Save connection</button><button className="secondary" disabled={!connection || !!form} onClick={() => run('mapping')}>Fetch Aiosell mapping</button></div>
-      <p id="aiosell-save-help" className="muted">Save connection stores the hotel code, switch setting and mapping edits. Save mappings stores the same configuration. To send pending updates immediately, use Sync now.</p>
-      <label>Restriction channel IDs (optional)<input value={channels ?? (connection?.restriction_channels || []).join(',')} onChange={e => setChannels(e.target.value)} placeholder="Comma-separated IDs confirmed by Aiosell" /></label>
-      <p className="muted">Leave blank to discover inventory targets automatically. When none are returned, inventory and rates can still be sent; restrictions remain pending. Do not copy unrelated partner IDs.</p>
-      <button className="secondary" disabled={!connection} onClick={saveChannels}>Save restriction targets</button>
-      {remote && <div className="notice"><p>{remote.hotel_name} · {remote.currency} · {remote.timezone}</p><p>Confirm the currency is INR and the timezone matches this property.</p>{remote.rooms?.map(room => <p key={room.room_id}>{room.room_name}: <strong>{room.room_id}</strong> — {room.rateplans?.map(plan => `${plan.rateplan_name} (${plan.rateplan_id})`).join(', ')}</p>)}</div>}
-      {current.mappings.map((mapping, index) => {
-        const selected = units.filter(unit => !unit.archivedAt && mapping.unitIds.includes(unit.id));
-        const prices = [...new Set(selected.map(unit => unit.nightlyRatePaise))];
-        const validPrice = selected.length === mapping.unitIds.length && selected.length > 0 && prices.length === 1 && prices[0] > 0;
-        const protectedMapping = !!connection?.enabled && index < savedMappings.length;
-        return <div className="aiosell-mapping" key={index}><CollapsibleCard title={`Room mapping ${index + 1}`} defaultOpen={!mapping.roomCode}
-          summary={<span>{mapping.roomCode || 'New mapping'} / {mapping.rateplanCode || 'Choose rate plan'}<br />{selected.length} {selected[0]?.type === 'BED' ? 'beds' : 'rooms'} selected · {validPrice ? `INR ${(prices[0] / 100).toFixed(2)} per ${selected[0].type === 'BED' ? 'bed' : 'room'} / night` : 'Check units and pricing'}{mapping.stopSell ? ' · Stop sell' : ''}</span>}>
-        <div className="space-y-3">
-        <label>Aiosell room code<input value={mapping.roomCode} readOnly={protectedMapping} aria-describedby={protectedMapping ? `mapping-lock-${index}` : undefined} onChange={e => {if (!protectedMapping) editMapping(index, {roomCode: e.target.value});}} /></label>
-        {protectedMapping && <p id={`mapping-lock-${index}`} className="muted">This saved mapping is active. Its room code and Remove mapping button are locked until inventory is closed and the connection is paused. You can still change stop-sell, minimum nights and prices in Pricing.</p>}
-        <label>Aiosell rate-plan code<input value={mapping.rateplanCode} onChange={e => editMapping(index, {rateplanCode: e.target.value})} /></label>
-        <div className="notice">{(() => {
-          return validPrice
-            ? <p>Following Pricing: INR {(prices[0] / 100).toFixed(2)} per {selected[0].type === 'BED' ? 'bed' : 'room'} / night.</p>
-            : <p role="alert">{prices.length > 1 ? 'Price conflict: mapped units have different prices. Match prices or split this category.' : 'Select active units and set a positive price in Pricing.'} Rates will not be published until corrected.</p>;
-        })()}<Link to="/pricing" className="underline">Edit in Pricing</Link></div>
-        <label>Minimum nights<input type="number" min="1" max="999" value={mapping.minimumStay} onChange={e => editMapping(index, {minimumStay: Number(e.target.value)})} /></label>
-        <div className="aiosell-stop-control"><button type="button" role="switch" aria-label="Stop sell" aria-checked={mapping.stopSell} className="aiosell-stop-switch"
-          onClick={() => setStopSellChange({index, roomCode: mapping.roomCode, enabled: !mapping.stopSell})}><span aria-hidden="true" /></button>
-          <div><strong className={mapping.stopSell ? 'aiosell-stop-active' : undefined}>Stop sell: {mapping.stopSell ? 'On' : 'Off'}</strong><p className="muted">Closes this category to new online bookings after saving and syncing.</p></div>
-        </div>
-        <fieldset><legend>Sellable units (one room type and gender policy per mapping)</legend><div className="grid gap-2 sm:grid-cols-2">{units.filter(u => !u.archivedAt).map(unit => <label className="flex gap-2" key={unit.id}><input type="checkbox" checked={mapping.unitIds.includes(unit.id)} onChange={e => editMapping(index, {unitIds: e.target.checked ? [...mapping.unitIds, unit.id] : mapping.unitIds.filter(id => id !== unit.id)})} />{unit.roomName} / {unit.label} ({unit.type})</label>)}</div></fieldset>
-        <button className="secondary" disabled={protectedMapping} aria-describedby={protectedMapping ? `mapping-lock-${index}` : undefined} onClick={() => {if (!protectedMapping) edit({mappings: current.mappings.filter((_, i) => i !== index)});}}>Remove mapping</button>
-        </div></CollapsibleCard></div>;
-      })}
-      <div className="flex flex-wrap gap-2"><button className="secondary" onClick={() => edit({mappings: [...current.mappings, emptyMapping()]})}>Add room mapping</button><button className="primary" onClick={() => run('save')}>Save mappings</button><button className="secondary" disabled={!!form || !connection?.enabled} onClick={() => run('sync')}>Sync now</button><button className="secondary" onClick={() => query.refetch()}>Refresh status</button></div>
-    </fieldset>
-    {error && <p role="alert" className="error">{error}</p>}{message && <p role="status">{message}</p>}
-    {(syncResults || connection?.last_sync_results?.stages) && <div className="space-y-2" aria-label="Aiosell sync results">{Object.entries(syncResults || connection.last_sync_results.stages).map(([stage, result]) => <p key={stage}><strong>{stage[0].toUpperCase() + stage.slice(1)}: {result.status === 'sent' ? 'Sent' : result.status === 'pending' ? 'Pending' : 'Failed'}</strong> — {result.message}</p>)}</div>}
-    {traceRows.length > 0 && <details className="notice" open={inventoryResult?.verification?.status === 'different'}><summary>Inventory sent / Aiosell read-back</summary>
-      <p>Hotel: {inventoryResult.details.hotelCode} · Snapshot revision: {inventoryResult.details.revision}. Up to 60 room/date values across the first 14 dates; the full sync still covers 90 days.</p>
-      <p>{inventoryResult.verification?.status === 'matched' ? 'Sampled counts matched at the time of this check.' : inventoryResult.verification?.status === 'different' ? 'Returned values differ or are missing. This does not by itself identify propagation delay or another writer.' : 'Read-back was not available. Sent counts show our request, not the current Aiosell inventory.'}</p>
-      <div className="overflow-auto max-h-96"><table><thead><tr><th>Date</th><th>Category</th><th>Mapped units</th><th>Sent</th><th>Aiosell returned</th></tr></thead><tbody>{traceRows.map(row => <tr key={`${row.date}-${row.roomCode}`}><td>{row.date}</td><td>{row.roomCode}</td><td>{row.mappedUnits}</td><td>{row.sent}</td><td>{row.received == null ? ['matched','different'].includes(inventoryResult.verification?.status) ? 'Not returned' : 'Not checked' : row.received}</td></tr>)}</tbody></table></div>
-    </details>}
-    <p className="muted">Last successful sync: {connection?.last_synced_at ? new Date(connection.last_synced_at).toLocaleString() : 'Never'}{connection?.last_error ? ` · ${connection.last_error}` : ''}</p>
-    <h3>Reservation events · {query.data?.reviewCount || 0} need review</h3><p className="notice">Events needing review temporarily close channel inventory for this property. Reconcile the reservation in Stayman against the latest booking in Aiosell, then enter its local booking reference to resolve the event. Modifications require manual review until event ordering is agreed with Aiosell. Up to 30 events appear, with reviews first.</p>
-    {query.data?.events?.map(event => <div className="card space-y-2" key={event.id}><p>{event.channel} · {event.booking_id} · {event.action} · <strong>{event.status}</strong></p>{event.issue && <p>{event.issue}</p>}{event.payload?.checkin && <p>{event.payload.guest?.name} · {event.payload.checkin} to {event.payload.checkout} · INR {(event.payload.totalPaise / 100).toFixed(2)} · {event.payload.rooms?.map(r => r.roomCode).join(', ')}</p>}{event.status === 'REVIEW' && <form onSubmit={e => resolve(e, event.id)} className="flex flex-wrap gap-2"><input name="reservation" aria-label="Reconciled local booking reference" placeholder="Local booking reference or UUID" defaultValue={event.reservation_id || ''} required maxLength={120} /><button disabled={busy} className="secondary">Confirm reconciled</button></form>}</div>)}
-  </div>;
+function Toggle({label,on,disabled,onChange}){return <button type="button" role="switch" aria-label={label} aria-checked={on} disabled={disabled} className="ao-switch" onClick={onChange}><span/></button>;}
+function salesLabel(item,state){
+ if(item.pending)return state.deliveryFailed?'Update failed':item.desiredOpen?'Reopening...':'Closing...';
+ return item.ackOpen===true?'Enabled - sent to Aiosell':item.ackOpen===false?'Closed - sent to Aiosell':'Not yet sent';
 }
+function GuestPrices({room}){const p=room.guestPricing;if(!p)return null;return <details className="ao-guest-prices"><summary>Guest pricing <ChevronDown size={14}/></summary><p>{p.includedGuests} guests included / Maximum {p.maxGuests}</p><p>Extra guest +{money(p.extraGuestPaise)} per night</p>{Array.from({length:Math.max(0,Math.min(10,p.maxGuests-p.includedGuests))},(_,i)=>p.includedGuests+i+1).map(n=><p key={n}>{n} guests: {money(Number(room.price)+(n-p.includedGuests)*p.extraGuestPaise)}/night</p>)}<small>One booking reserves the whole room. Prices sent online follow the administrator's configured guest-count plans.</small></details>;}
+function BookingReview({issue,adapter,onClose,onDone}){
+ const query=useQuery({queryKey:['aiosell-review',adapter===aiosellOwnerAdapter?'live':'preview',issue.key],queryFn:()=>adapter.review(issue.key),retry:false});
+ const [selected,setSelected]=useState(''),[verified,setVerified]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');const ref=useRef(null);
+ useEffect(()=>{ref.current.showModal();return()=>ref.current?.close();},[]);
+ async function finish(create){setBusy(true);setError('');try{create?await adapter.create(issue.key):await adapter.link(issue.key,selected);await onDone(create?'Reservation created.':'Existing reservation linked.');}catch(e){setError(e.message);}finally{setBusy(false);}}
+ const data=query.data;
+ return <dialog ref={ref} className="aiosell-owner-dialog" aria-label="Review booking" onCancel={e=>{e.preventDefault();if(!busy)onClose();}}><div className="ao-heading"><h3>Review booking</h3><button type="button" className="secondary" onClick={onClose} disabled={busy}>Close</button></div>{query.isPending?<p>Loading booking...</p>:query.error?<p role="alert">Could not load this booking. Try again.</p>:<><p><strong>{data.reference}</strong> / {data.guest}</p><p>{data.from} to {data.through} / {money(data.total)}</p><p className="ao-note">{issue.reason} Verify the latest booking in Aiosell before continuing. Availability and duplicate checks still apply.</p><label>Existing reservation<select aria-label="Existing reservation" value={selected} onChange={e=>{setSelected(e.target.value);setVerified(false);}}><option value="">Choose a matching reservation</option>{data.candidates?.map(r=><option key={r.key} value={r.key}>{r.reference} / {r.guest} / {r.from} to {r.through} / {money(r.total)}</option>)}</select></label>{selected&&<p>{data.candidates.find(r=>r.key===selected)?.rooms||'No assigned room'} / {data.candidates.find(r=>r.key===selected)?.status}</p>}<label className="ao-check"><input type="checkbox" checked={verified} onChange={e=>setVerified(e.target.checked)}/>I checked the guest, dates, room and total against the latest Aiosell booking.</label><div className="ao-actions"><button className="primary" type="button" disabled={!verified||!selected||busy} onClick={()=>finish(false)}>Link existing reservation</button>{data.canCreate&&<button className="secondary" type="button" disabled={!verified||!!selected||busy} onClick={()=>finish(true)}>Check availability & create</button>}</div><p className="muted">If a matching booking already exists, link it. For a changed or cancelled booking, correct its stay/payment details first from Reservations.</p></>}{error&&<p role="alert" className="error">{error}</p>}</dialog>;
+}
+export function AiosellOwnerPanel({property,adapter=aiosellOwnerAdapter,admin=false,readOnly=false,pricingHref}){
+ const interval=useVisiblePolling(5000);
+ const query=useQuery({queryKey:['aiosell-owner',adapter===aiosellOwnerAdapter?'live':'preview',property.id],queryFn:()=>adapter.load(property.id),retry:false,refetchInterval:q=>q.state.data?.pending?interval:false});
+ const [confirm,setConfirm]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[review,setReview]=useState(null);
+ const state=query.data,ready=state?.ready&&state?.approved;
+ async function act(){if(readOnly||!confirm)return;setBusy(true);setError('');setMessage('');try{setMessage(await adapter.act(property.id,state,confirm));setConfirm(null);await query.refetch();}catch(e){setError(e.message);}finally{setBusy(false);}}
+ if(query.isPending)return <p role="status">Checking Aiosell connection...</p>;
+ if(query.error)return <section className="ao-card"><h2>Couldn't check Aiosell</h2><p role="alert">Your saved connection has not been changed.</p><button className="secondary" onClick={()=>query.refetch()}>Try again</button></section>;
+ const scope=state.scope?`${state.scope.from} through ${state.scope.through}`:'the configured date window';
+ const initial=['READY','ACTIVATING'].includes(state.state);
+ const unavailable=['UNCONFIGURED','INCOMPLETE'].includes(state.state);
+ return <div className="aiosell-owner">
+  {confirm&&<Confirm title={confirm.title} onCancel={()=>setConfirm(null)} onConfirm={act} busy={busy} label={confirm.label}><p>{confirm.description}</p>{['room','site','stop_all','approve'].includes(confirm.type)&&<><p><strong>Date scope:</strong> {scope}.</p><p>Existing bookings remain unchanged. Acceptance by Aiosell does not confirm each booking site's application.</p></>}</Confirm>}
+  {review&&<BookingReview issue={review} adapter={adapter} onClose={()=>setReview(null)} onDone={async text=>{setReview(null);setMessage(text);await query.refetch();}}/>}
+  {message&&<p role="status" className="ao-feedback">{message}</p>}{error&&<p role="alert" className="error">{error}</p>}
+  {unavailable?<section className="ao-card"><div className="ao-heading"><div><h2>{state.state==='UNCONFIGURED'?"Aiosell isn't set up":'Aiosell setup is incomplete'}</h2><p>{state.state==='UNCONFIGURED'?'Ask your administrator to connect Aiosell for this property.':'Your administrator needs to finish connecting your property.'}</p></div><span className="ao-badge">Setup required</span></div>{state.reason&&<p className="ao-note">{state.reason}</p>}</section>:<section className="ao-card"><div className="ao-heading"><div><h2>{initial?'Review your online rooms':'Aiosell connection'}</h2><p>{initial?'Check your rooms and prices before accepting online bookings.':'Keep your online availability and prices updated.'}</p></div><span className="ao-badge">{state.deliveryFailed?'Needs attention':state.pending?'Update pending':initial?'Ready for review':'Connected'}</span></div><div className="ao-property"><strong>{state.propertyName}</strong><small>{state.rooms?.length||0} included / {state.excluded?.length||0} excluded / {state.ready?'0 unresolved':'Setup needs attention'}</small></div>{state.lastAcceptedAt&&<p className="muted">Last accepted by Aiosell: {new Date(state.lastAcceptedAt).toLocaleString(undefined,{timeZone:property.timezone||'Asia/Kolkata'})}</p>}
+   {!initial&&<div className="ao-control"><div><strong>Automatic updates</strong><p>Turning this off stops automatic price and availability updates. Incoming bookings still arrive.</p>{!state.autoSync&&<p className="ao-note">Online availability may become outdated. Sales switches still send updates immediately.</p>}</div><Toggle label="Automatic updates" on={!!state.autoSync} disabled={readOnly||busy||!ready} onChange={()=>setConfirm({type:'auto',open:!state.autoSync,title:state.autoSync?'Turn off automatic updates?':'Turn on automatic updates?',description:state.autoSync?'Online rooms stay on sale at their last published availability and prices. Incoming bookings will still arrive. An update already in progress may finish.':'Send pending price and availability changes. Existing room and booking-site closures stay in place.',label:state.autoSync?'Turn off updates':'Turn on updates'})}/></div>}
+   <div className="ao-actions"><Link className="secondary" to={pricingHref||(adapter===aiosellOwnerAdapter?'/pricing':'#preview-pricing')}>Change prices</Link>{state.deliveryFailed&&<button className="secondary" disabled={readOnly||busy} onClick={()=>setConfirm({type:'retry',title:'Retry pending updates?',description:'Send the saved choices again without changing room matches or sales preferences.',label:'Retry update'})}>Retry update</button>}<button className="ao-text-button" onClick={()=>query.refetch()} disabled={query.isFetching}><RefreshCw size={14}/>Refresh</button></div>
+   {initial&&<p className="ao-note">Prepared booking sites: {state.sites?.map(s=>s.name+(s.desiredOpen?' (accept bookings)':' (sales closed)')).join(', ')||'Booking-site controls need administrator verification.'}<br/>Check the list below. Contact your administrator if a match or guest limit needs correcting.</p>}
+  </section>}
+  {!unavailable&&<>
+   {!initial&&<details className="ao-card ao-sites"><summary><div><h2>Booking sites</h2><p>Choose where guests can book your rooms.</p></div><span>{state.sites?.filter(s=>s.ackOpen).length||0} enabled <ChevronDown size={16}/></span></summary><div className="ao-site-grid">{state.sites?.map(site=><article className="ao-site" key={site.key}><div className="ao-site-name"><span className="ao-site-mark">{site.name.slice(0,2).toUpperCase()}</span><strong>{site.name}</strong></div><div className="ao-control"><div><span>{!site.configured?(site.setupState==='NOT_CONFIGURED'?'Setup required':'Setup incomplete'):salesLabel(site,state)}</span>{!site.configured&&<p>Your administrator needs to finish setup.</p>}</div><Toggle label={'Accept bookings on '+site.name} on={site.ackOpen===true} disabled={readOnly||!site.configured||busy||site.pending||!ready} onChange={()=>setConfirm({type:'site',key:site.key,open:!site.ackOpen,title:(site.ackOpen?'Stop new bookings on ':'Accept bookings on ')+site.name+'?',description:`Applies to all ${state.rooms.length} included room categories on ${site.name}. Room-level closures remain in place.`,label:site.ackOpen?'Stop bookings':'Accept bookings'})}/></div></article>)}</div>{!state.sites?.length&&<p className="ao-note">Booking-site controls haven't been verified. Ask your administrator to finish setup. This does not prove the hotel has no connected sites.</p>}<p className="muted">Booking-site setup is administrator-verified. Switches reflect settings accepted by Aiosell, not a live OTA availability check.</p></details>}
+   <section className="ao-card"><div className="ao-heading"><div><h2>Rooms sold online</h2><p>Manage which rooms guests can book online.</p></div>{!initial&&<button className="ao-text-button ao-danger" disabled={readOnly||busy||!ready} onClick={()=>setConfirm({type:'stop_all',title:'Stop all online sales?',description:`Close all ${state.rooms.length} included room categories across applicable connected booking sites.`,label:'Stop all online sales'})}>Stop all online sales</button>}</div>
+    <div className="ao-room-list">{state.rooms?.map(room=><article className="ao-room" key={room.key}><div><strong>{room.name}</strong><small>Online category: {room.category}</small>{initial&&<small>{room.desiredOpen?'Prepared for online sales':'Prepared with sales closed'}</small>}{!initial&&<span className="ao-room-state">{salesLabel(room,state)}{state.sites?.some(s=>s.ackOpen===false)?' / Some booking sites closed':''}</span>}</div><div className="ao-room-price"><strong>{money(room.price)}</strong><small>per {room.guestPricing?'room':'unit'} / night</small></div>{!initial&&<div className="ao-room-switch"><span>Sell online</span><Toggle label={'Sell '+room.name+' online'} on={room.ackOpen===true} disabled={readOnly||busy||room.pending||!ready} onChange={()=>setConfirm({type:'room',key:room.key,open:!room.ackOpen,title:(room.ackOpen?'Close ':'Reopen ')+room.name+' online?',description:`Applies to this category across applicable connected booking sites. Other room and booking-site closures remain unchanged.`,label:room.ackOpen?'Close sales':'Reopen sales'})}/></div>}<GuestPrices room={room}/></article>)}{state.excluded?.map((room,i)=><article className="ao-room ao-excluded" key={i}><div><strong>{room.name}</strong><small>Not included online / Contact your administrator to include it.</small></div><strong>{money(room.price)}</strong></article>)}</div>
+    <p className="muted">Settings apply to {scope}. An enabled room may still be unavailable because it is booked, restricted by date, or closed on a booking site.</p>
+    {initial&&<div className="ao-actions"><button className="primary" disabled={readOnly||busy||!state.ready||state.pending} onClick={()=>setConfirm({type:'approve',title:'Start selling online?',description:`Approve these ${state.rooms.length} prepared categories and their prices. Excluded units are not managed by Stayman; your administrator must check their remote availability.`,label:'Start selling online'})}>Start selling online</button></div>}
+   </section>
+  </>}
+  {state.issues?.length>0&&<section className="ao-card"><div className="ao-heading"><div><h2>Bookings needing attention</h2><p>Review bookings that need your help.</p></div><span className="ao-badge">{state.issues.length}</span></div>{state.issues.map(issue=><article className="ao-issue" key={issue.key}><div><strong>{issue.reference} / {issue.guest}</strong><small>{issue.from} to {issue.through} / {issue.rooms}</small><p>{issue.reason}</p></div><button className="secondary" disabled={readOnly} onClick={()=>setReview(issue)}>Review booking</button></article>)}</section>}
+  {(admin||state.canConfigure)&&<Link className="ao-text-button" to={'/godfather/properties/'+property.id+'/aiosell'}>Administrator configuration</Link>}
+ </div>;
+}
+export default function AiosellSettings({property}){return <AiosellOwnerPanel property={property}/>;}

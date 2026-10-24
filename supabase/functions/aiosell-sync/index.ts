@@ -23,14 +23,21 @@ Deno.serve(async request => {
     const {data, error} = await caller.auth.getUser();
     if (error || !data.user) return reply({error: 'Sign in again.'}, 401);
     const {data: owner} = await caller.rpc('stayman_is_owner', {p_property: body.property});
-    if (owner !== true) return reply({error: 'Owner access required.'}, 403);
+    const admin = (await caller.rpc('stayman_is_platform_admin'))?.data;
+    if (body.action === 'mapping' ? admin !== true : owner !== true && admin !== true) return reply({error: body.action === 'mapping' ? 'Administrator configuration required.' : 'Owner access required.'}, 403);
   }
   const partner = Deno.env.get('AIOSELL_PARTNER_ID') || 'sample-pms';
   const env = (name: string) => Deno.env.get(name);
   if (body.action === 'mapping' && !worker) {
     const {data: connection, error} = await service.from('stayman_aiosell_connections').select('hotel_code').eq('property_id', body.property).single();
-    if (error) return reply({error: 'Save the hotel code first.'}, 400);
-    try { return reply(await aiosellRequest(`/property_details/${encodeURIComponent(connection.hotel_code)}?partnerId=${encodeURIComponent(partner)}`, null, env)); }
+    const hotel = typeof body.hotelCode === 'string' ? body.hotelCode.trim() : connection?.hotel_code;
+    if (!hotel || hotel.length > 120) return reply({error: 'Enter a hotel code.'}, 400);
+    try {
+      const details = await aiosellRequest(`/property_details/${encodeURIComponent(hotel)}?partnerId=${encodeURIComponent(partner)}`, null, env);
+      const {error: storeError} = await service.rpc('stayman_aiosell_store_remote', {p_property:body.property,p_hotel:hotel,p_details:details});
+      if(storeError) return reply({error:'Property could not be verified locally. Apply the owner-operations database update.'},503);
+      return reply(details);
+    }
     catch (error) { return reply({error: error instanceof Error ? error.message : 'Mapping fetch failed.'}, 502); }
   }
   if (body.action === 'noshow') {
@@ -59,7 +66,7 @@ Deno.serve(async request => {
   if (!job) {const noShow=await sendNoShow();return reply({message:'No pending inventory sync. Another worker may be active.',...(noShow?{no_show:noShow}:{})});}
   const results: Record<string, {status: string; message: string; details?: any; verification?: any}> = {};
   const attempt = async (stage: string, action: () => Promise<unknown>) => {
-    try { await action(); results[stage] ||= {status: 'sent', message: 'Accepted by Aiosell; verify in sandbox UI.'}; }
+    try { await action(); results[stage] ||= {status: 'sent', message: 'Accepted by Aiosell; booking-site application is not confirmed.'}; }
     catch (error) { results[stage] = {status: 'failed', message: error instanceof Error ? error.message : 'Request failed.'}; }
   };
   // Independent stages preserve successful results even when another stage fails.
@@ -69,10 +76,11 @@ Deno.serve(async request => {
     results.inventory = {status:'sent', message:'Accepted by Aiosell.', details};
   });
   await attempt('rates', async () => {
-    const invalid = job.mappings.find((m: any) => m.priceError || !Number.isSafeInteger(m.ratePaise) || m.ratePaise <= 0);
+    if(job.salesOnly){results.rates={status:'skipped',message:'Not requested; automatic price updates are off.'};return;}
+    const invalid = job.mappings.find((m: any) => m.priceError || (m.ratePlans || [m]).some((p: any) => !Number.isSafeInteger(p.ratePaise) || p.ratePaise <= 0));
     if (invalid) throw new Error(`${invalid.roomCode}: ${invalid.priceError || 'Set a positive price in Pricing.'}`);
     await aiosellRequest(`/update-rates/${encodeURIComponent(partner)}`, {hotelCode: job.hotelCode, updates: [{startDate: job.startDate, endDate: job.endDate,
-      rates: job.mappings.map((m: any) => ({roomCode: m.roomCode, rateplanCode: m.rateplanCode, rate: m.ratePaise / 100}))}]}, env);
+      rates: job.mappings.flatMap((m: any) => (m.ratePlans || [m]).map((p: any) => ({roomCode: m.roomCode, rateplanCode: p.rateplanCode, rate: p.ratePaise / 100})))}]}, env);
   });
   // One bounded read after owner-triggered syncs; scheduled jobs add no read-back traffic.
   if (!worker && results.inventory.status === 'sent') {
@@ -97,25 +105,38 @@ Deno.serve(async request => {
     const {data: config, error: configError} = await service.from('stayman_aiosell_connections').select('restriction_channels').eq('property_id', job.property).single();
     if (configError) throw new Error('Could not load restriction targets. Apply migration 028.');
     let channels = config?.restriction_channels || [];
-    if (!channels.length) {
+    if (!channels.length && !(job.sites?.length || job.siteSetupCount)) {
       const property = await aiosellRequest(`/property_details/${encodeURIComponent(job.hotelCode)}?partnerId=${encodeURIComponent(partner)}`, null, env);
       channels = [...new Set((property.connected_channels || []).filter((c: any) => c.operation === 'inventory' && typeof c.partner_id === 'string' && c.partner_id.trim()).map((c: any) => c.partner_id))];
     }
-    if (!channels.length) {
+    if (!channels.length && !(job.sites?.length || job.siteSetupCount)) {
       results.restrictions = {status: 'pending', message: 'Not sent: no inventory channel targets. Add Aiosell-confirmed restriction channels in Settings.'};
       return;
     }
-    await aiosellRequest(`/update/${encodeURIComponent(partner)}`, {hotelCode: job.hotelCode, toChannels: channels, updates: [{startDate: job.startDate, endDate: job.endDate,
-      rooms: job.mappings.map((m: any) => ({roomCode: m.roomCode, restrictions: {stopSell: job.blocked || m.stopSell, minimumStay: m.minimumStay}}))}]}, env);
+    const pendingSites = job.sites || [];
+    const channelResults: Record<string, {status:string;message:string}> = {};
+    const targetGroups = job.siteSetupCount > 0
+      ? pendingSites.map((site:any)=>({key:site.key,targets:[site.target],open:site.open}))
+      : [{key:'legacy',targets:channels,open:true}];
+    if(!targetGroups.length){results.restrictions={status:'pending',message:'Booking-site setup needs administrator attention.'};return;}
+    for(const group of targetGroups){
+      try{
+        await aiosellRequest(`/update/${encodeURIComponent(partner)}`, {hotelCode: job.hotelCode, toChannels: group.targets, updates: [{startDate: job.startDate, endDate: job.endDate,
+          rooms: job.mappings.map((m: any) => ({roomCode: m.roomCode, restrictions: {stopSell: !group.open || (job.blockedRooms ? job.blockedRooms.includes(m.roomCode) : job.blocked) || m.stopSell, minimumStay: m.minimumStay}}))}]}, env);
+        channelResults[group.key]={status:'sent',message:'Accepted by Aiosell; OTA application is not confirmed.'};
+      }catch(error){channelResults[group.key]={status:'failed',message:error instanceof Error?error.message:'Delivery failed.'};}
+    }
+    const failed=Object.values(channelResults).some(result=>result.status!=='sent');
+    results.restrictions={status:failed?'failed':'sent',message:failed?'Some booking-site rules could not be delivered.':'Rules accepted by Aiosell; verify changes on booking sites.',channels:channelResults} as any;
   });
   // The no-target branch must remain pending, not become a successful stage.
-  const incomplete = Object.entries(results).filter(([, result]) => result.status !== 'sent');
+  const incomplete = Object.entries(results).filter(([, result]) => !['sent','skipped'].includes(result.status));
   const failure = incomplete.length ? incomplete.map(([stage, result]) => `${stage}: ${result.message}`).join(' ') : null;
-  const {error: finishError} = await service.rpc('stayman_aiosell_finish_result', {p_property: job.property, p_lease: job.lease, p_revision: job.revision, p_results: results, p_error: failure});
+  const {error: finishError} = await service.rpc(job.sales ? 'stayman_aiosell_finish_delivery' : 'stayman_aiosell_finish_result', {p_property: job.property, p_lease: job.lease, p_revision: job.revision, p_results: results, p_error: failure, ...(job.sales ? {p_sales:job.sales,p_sites:job.sites||[]} : {})});
   if (finishError) return reply({error: 'Sync completion could not be saved; a retry will reconcile it.'}, 503);
   const noShow=await sendNoShow();
   const failed = Object.values(results).some(result => result.status === 'failed');
   return reply({...(noShow?{no_show:noShow}:{}),status: failed ? 'failed' : failure ? 'partial' : 'complete', results,
-    message: failure ? 'Sync partially completed. Review the individual results below.' : 'Inventory, rates and restrictions sent to Aiosell.',
+    message: failure ? 'Sync partially completed. Review the individual results below.' : job.salesOnly ? 'Sales settings sent to Aiosell. Automatic price updates remain off.' : 'Inventory, rates and restrictions sent to Aiosell.',
     ...(failed ? {error: failure} : {warning: failure})}, failed ? 502 : 200);
 });
