@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "categories": [
+    {
+      "slug": "aiosell",
+      "name": "Aiosell and online distribution",
+      "faq_file": "aiosell/faq.md",
+      "instructions_file": "aiosell/instructions.md",
+      "case_notes_file": "aiosell/case-notes.md",
+      "reviewed_through": "2026-10-24",
+      "implementation_baseline": "Stayman source through migration 048; deployment must be verified separately"
+    },
+    {
+      "slug": "data-cleanup",
+      "name": "Test data cleanup",
+      "faq_file": "data-cleanup/faq.md",
+      "instructions_file": "../scripts/admin/cleanup-test-bookings.md",
+      "reviewed_through": "2026-10-24",
+      "implementation_baseline": "One-off reviewed SQL Editor script; not an owner UI deletion feature"
+    }
+  ]
+}
